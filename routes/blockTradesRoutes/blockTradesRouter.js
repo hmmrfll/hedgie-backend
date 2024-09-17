@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { getBlockTrades } = require('../controllers/blockTradesController');
+const { getBlockTrades } = require('../../controllers/blockTradesController');
 
 // Маршрут для получения BTC блок-трейдов
 router.get('/btc', (req, res) => getBlockTrades('btc_block_trades', res));

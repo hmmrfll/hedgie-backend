@@ -1,11 +1,11 @@
 const express = require('express');
-const pool = require('../config/database');
+const pool = require('../../config/database');
 const router = express.Router();
 
 // Получение количества сделок по каждой дате истечения для конкретной валюты и страйка
 router.get('/expiration-activity/:currency/:strike?', async (req, res) => {
     const { currency, strike } = req.params;
-    const tableName = currency.toLowerCase() === 'btc' ? 'all_btc_trades' : 'all_eth_trades';
+    const tableName = currency.toLowerCase() === 'btc' ? 'btc_block_trades' : 'eth_block_trades';
 
     try {
         let query = `

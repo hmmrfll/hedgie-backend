@@ -1,5 +1,5 @@
 const express = require('express');
-const pool = require('../config/database'); // Assuming you have the database config set up
+const pool = require('../../config/database'); // Assuming you have the database config set up
 const router = express.Router();
 
 // Route to get popular options for a specific currency (BTC/ETH)
@@ -7,7 +7,7 @@ router.get('/popular-options/:currency', async (req, res) => {
     const { currency } = req.params;
 
     // Determine the correct table based on currency
-    const tableName = currency.toLowerCase() === 'btc' ? 'all_btc_trades' : 'all_eth_trades';
+    const tableName = currency.toLowerCase() === 'btc' ? 'btc_block_trades' : 'eth_block_trades';
 
     try {
         // Fetch the popular options based on instrument_name and count the number of trades

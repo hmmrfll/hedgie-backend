@@ -1,5 +1,5 @@
 const express = require('express');
-const pool = require('../config/database');
+const pool = require('../../config/database');
 const router = express.Router();
 
 router.get('/strike-activity/:currency', async (req, res) => {

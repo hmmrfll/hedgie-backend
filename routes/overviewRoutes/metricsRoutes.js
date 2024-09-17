@@ -1,5 +1,5 @@
 const express = require('express');
-const { getBTCMetrics, getETHMetrics } = require('../controllers/metricsController');
+const { getBTCMetrics, getETHMetrics } = require('../../controllers/metricsController');
 const router = express.Router();
 
 router.get('/btc', getBTCMetrics);

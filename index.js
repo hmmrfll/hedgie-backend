@@ -4,19 +4,27 @@ const express = require('express');
 const cors = require('cors');
 const pool = require('./config/database');
 const authRoutes = require('./routes/authRoutes');
-const metricsRoutes = require('./routes/metricsRoutes');
-const blockTradesRouter = require('./routes/blockTradesRouter');
+const metricsRoutes = require('./routes/overviewRoutes/metricsRoutes');
+const blockTradesRouter = require('./routes/blockTradesRoutes/blockTradesRouter');
 const maxPainRoutes = require('./routes/maxPainRoutes'); // Добавляем этот импорт
-const popularOptionsRouter = require('./routes/popularOptionsRouter');
-const strikeActivityRouter = require('./routes/strikeActivityRouter');
+const popularOptionsRouter = require('./routes/overviewRoutes/popularOptionsRouter');
+const strikeActivityRouter = require('./routes/overviewRoutes/strikeActivityRouter');
 const expirationRouter = require('./routes/expirationRoutes');
-const expirationActivityRouter = require('./routes/expirationActivityRouter');
+const expirationActivityRouter = require('./routes/overviewRoutes/expirationActivityRouter');
 const strikeRouter = require('./routes/strikeRouter');
-const timeDistributionRouter = require('./routes/timeDistributionRouter');
-const keyMetricsRouter = require('./routes/keyMetricsRouter');
+const timeDistributionRouter = require('./routes/overviewRoutes/timeDistributionRouter');
+const keyMetricsRouter = require('./routes/overviewRoutes/keyMetricsRouter');
 const flowDataRouter = require('./routes/flowDataRouter');
-
-
+const popularOptionsBlockTradesRouter = require('./routes/blockTradesRoutes/popularOptionsBlockTradesRouter');
+const strikeActivityBlockTradesRouter = require('./routes/blockTradesRoutes/strikeActivityBlockTradesRouter');
+const expirationActivityBlockTradesRouter = require('./routes/blockTradesRoutes/expirationActivityBlockTradesRouter');
+const timeDistributionBlockTradesRouter = require('./routes/blockTradesRoutes/timeDistributionBlockTradesRouter');
+const keyMetricsBlockTradesRouter = require('./routes/blockTradesRoutes/keyMetricsBlockTradesRouter');
+const openInterest = require('./routes/openInterestRoutes/openInterest');
+const openInterestByExpirationRouter = require('./routes/openInterestRoutes/openInterestByExpirationRouter');
+const openInterestByStrikeRouter = require('./routes/openInterestRoutes/openInterestByStrikeRouter');
+const openInterestDeltaAdjusted = require('./routes/openInterestRoutes/openInterestDeltaAdjusted');
+const openInterestHistorical = require('./routes/openInterestRoutes/openInterestHistorical');
 
 const app = express();
 
@@ -28,10 +36,13 @@ app.use(cors({
 
 app.use(express.json());
 
-app.use('/api', authRoutes);
 app.use('/api/metrics', metricsRoutes, popularOptionsRouter ,strikeActivityRouter, expirationActivityRouter, timeDistributionRouter,keyMetricsRouter);
-app.use('/api/block-trades', blockTradesRouter);
-app.use('/api', maxPainRoutes, expirationRouter, strikeRouter, flowDataRouter);
+app.use('/api/block-trades', blockTradesRouter, popularOptionsBlockTradesRouter, strikeActivityBlockTradesRouter, expirationActivityBlockTradesRouter, timeDistributionBlockTradesRouter, keyMetricsBlockTradesRouter);
+app.use('/api', authRoutes, maxPainRoutes, expirationRouter, strikeRouter, flowDataRouter);
+// for open interest
+app.use('/api/open-interest', openInterest);
+app.use('/api', openInterestByExpirationRouter, openInterestByStrikeRouter, openInterestDeltaAdjusted, openInterestHistorical);
+
 
 
 
