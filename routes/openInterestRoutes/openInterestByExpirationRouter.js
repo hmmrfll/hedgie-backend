@@ -11,7 +11,7 @@ router.get('/open-interest-by-expiration/:asset/:strike', async (req, res) => {
 
         const query = `
             SELECT 
-                to_char(timestamp, 'DD-MON-YY') AS expiration,
+                substring(instrument_name from '[0-9]{2}[A-Z]{3}[0-9]{2}') AS expiration,
                 SUM(CASE WHEN instrument_name LIKE '%P' THEN contracts ELSE 0 END) AS puts_otm,
                 SUM(CASE WHEN instrument_name LIKE '%C' THEN contracts ELSE 0 END) AS calls_otm,
                 SUM(CASE WHEN instrument_name LIKE '%P' THEN contracts * mark_price ELSE 0 END) AS puts_market_value,
@@ -28,6 +28,7 @@ router.get('/open-interest-by-expiration/:asset/:strike', async (req, res) => {
 
         res.json(result.rows);
     } catch (error) {
+        console.error('Error fetching open interest data:', error);
         res.status(500).json({ message: 'Failed to fetch open interest data', error });
     }
 });

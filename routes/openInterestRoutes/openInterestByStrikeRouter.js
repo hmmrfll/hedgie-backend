@@ -1,8 +1,7 @@
 const express = require('express');
-const pool = require('../../config/database'); // Подключение к базе данных
+const pool = require('../../config/database');
 const router = express.Router();
 
-// Маршрут для получения данных об открытых интересах по страйкам
 router.get('/open-interest-by-strike/:asset/:expiration', async (req, res) => {
     const { asset, expiration } = req.params;
     try {
