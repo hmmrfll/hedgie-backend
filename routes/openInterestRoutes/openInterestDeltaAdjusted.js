@@ -15,7 +15,6 @@ router.get('/delta-adjusted-open-interest-by-strike/:asset/:expiration', async (
                 SUM(CASE WHEN instrument_name LIKE '%P' THEN contracts * iv ELSE 0 END) AS puts_delta_adjusted,
                 SUM(CASE WHEN instrument_name LIKE '%C' THEN contracts * iv ELSE 0 END) AS calls_delta_adjusted
             FROM ${asset.toLowerCase() === 'btc' ? 'all_btc_trades' : 'all_eth_trades'}
-            WHERE timestamp >= NOW() - INTERVAL '24 hours'
             ${expirationCondition}
             GROUP BY strike
             ORDER BY strike;

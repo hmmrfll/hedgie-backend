@@ -25,6 +25,9 @@ const openInterestByExpirationRouter = require('./routes/openInterestRoutes/open
 const openInterestByStrikeRouter = require('./routes/openInterestRoutes/openInterestByStrikeRouter');
 const openInterestDeltaAdjusted = require('./routes/openInterestRoutes/openInterestDeltaAdjusted');
 const openInterestHistorical = require('./routes/openInterestRoutes/openInterestHistorical');
+const volumeInterestRouter = require('./routes/volumeRoutes/volumeInterestRouter');
+const volumeByExpirationRouter = require('./routes/volumeRoutes/volumeByExpirationRouter');
+const volumeByStrikeRouter = require('./routes/volumeRoutes/volumeByStrikeRouter');
 
 const app = express();
 
@@ -43,6 +46,7 @@ app.use('/api', authRoutes, maxPainRoutes, expirationRouter, strikeRouter, flowD
 app.use('/api/open-interest', openInterest);
 app.use('/api', openInterestByExpirationRouter, openInterestByStrikeRouter, openInterestDeltaAdjusted, openInterestHistorical);
 
+app.use('/api/volume', volumeInterestRouter, volumeByExpirationRouter, volumeByStrikeRouter);
 
 
 

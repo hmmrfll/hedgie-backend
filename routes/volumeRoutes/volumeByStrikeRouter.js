@@ -16,6 +16,7 @@ router.get('/open-interest-by-strike/:asset/:expiration', async (req, res) => {
                 SUM(CASE WHEN instrument_name LIKE '%P' THEN contracts * mark_price ELSE 0 END) AS puts_market_value,
                 SUM(CASE WHEN instrument_name LIKE '%C' THEN contracts * mark_price ELSE 0 END) AS calls_market_value
             FROM ${asset.toLowerCase() === 'btc' ? 'all_btc_trades' : 'all_eth_trades'}
+            WHERE timestamp >= NOW() - INTERVAL '24 hours'
             ${expirationCondition} -- Условие на основе даты истечения в имени инструмента
             GROUP BY strike
             ORDER BY strike;

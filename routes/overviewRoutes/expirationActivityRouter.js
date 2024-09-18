@@ -19,8 +19,8 @@ router.get('/expiration-activity/:currency/:strike?', async (req, res) => {
                 timestamp >= NOW() - INTERVAL '24 hours'
         `;
 
-        // Если указан страйк, добавляем условие фильтрации по страйку
-        if (strike) {
+        // Если указан страйк и он не "all", добавляем условие фильтрации по страйку
+        if (strike && strike !== 'all') {
             query += ` AND instrument_name LIKE '%-${strike}-%'`;
         }
 

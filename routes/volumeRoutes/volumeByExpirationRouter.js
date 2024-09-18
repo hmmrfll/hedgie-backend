@@ -1,5 +1,4 @@
 const express = require('express');
-const axios = require('axios'); // Подключаем axios для выполнения локального запроса к API
 const pool = require('../../config/database'); // Подключение к базе данных
 const router = express.Router();
 
@@ -7,21 +6,10 @@ const router = express.Router();
 router.get('/open-interest-by-expiration/:asset/:strike', async (req, res) => {
     const { asset, strike } = req.params;
     try {
-        // Получаем активные даты экспирации с использованием локального API
-        const response = await axios.get(`http://localhost:${process.env.PORT}/api/expirations/${asset.toLowerCase()}`);
-        const activeExpirations = response.data;
-
-        if (!activeExpirations || activeExpirations.length === 0) {
-            return res.status(400).json({ message: 'No active expirations found.' });
-        }
-
-        // Подготавливаем часть SQL-запроса для фильтрации только активных дат экспирации
-        const activeExpirationsCondition = activeExpirations.map(exp => `instrument_name LIKE '%-${exp}-%'`).join(' OR ');
-
         // Формируем SQL-запрос в зависимости от выбранного страйка
         const strikeCondition = strike === 'all' ? '' : `AND instrument_name LIKE '%-${strike}-%'`;
 
-        let query = `
+        const query = `
             SELECT 
                 substring(instrument_name from '[0-9]{2}[A-Z]{3}[0-9]{2}') AS expiration,
                 SUM(CASE WHEN instrument_name LIKE '%P' THEN contracts ELSE 0 END) AS puts_otm,
@@ -30,7 +18,7 @@ router.get('/open-interest-by-expiration/:asset/:strike', async (req, res) => {
                 SUM(CASE WHEN instrument_name LIKE '%C' THEN contracts * mark_price ELSE 0 END) AS calls_market_value,
                 SUM(contracts * mark_price) AS notional_value
             FROM ${asset.toLowerCase() === 'btc' ? 'all_btc_trades' : 'all_eth_trades'}
-            WHERE (${activeExpirationsCondition})
+            WHERE timestamp >= NOW() - INTERVAL '24 hours'
             ${strikeCondition}
             GROUP BY expiration
             ORDER BY expiration;

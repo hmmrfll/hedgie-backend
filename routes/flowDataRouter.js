@@ -38,7 +38,7 @@ router.get('/trades', async (req, res) => {
         const trades = result.rows;
 
         if (trades.length === 0) {
-            return res.json([]);  // Нет данных
+            return res.json({ trades: [], putCallRatio: 0, totalPuts: 0, totalCalls: 0, putsPercentage: 0, callsPercentage: 0 });  // Нет данных
         }
 
         // Рассчитываем среднее значение для размера и премии, игнорируя некорректные значения
@@ -50,7 +50,6 @@ router.get('/trades', async (req, res) => {
 
         const averageSize = validTradesForSize.length > 0 ? totalSize / validTradesForSize.length : 0;
         const averagePremium = validTradesForPremium.length > 0 ? totalPremium / validTradesForPremium.length : 0;
-
 
         let filteredTrades = trades;
 
@@ -66,7 +65,6 @@ router.get('/trades', async (req, res) => {
             filteredTrades = filteredTrades.filter(trade => trade.price >= averagePremium);
         }
 
-
         if (sizeOrder === 'higher to lower') {
             filteredTrades = filteredTrades.sort((a, b) => b.amount - a.amount);
         } else if (sizeOrder === 'lesser to greater') {
@@ -79,7 +77,23 @@ router.get('/trades', async (req, res) => {
             filteredTrades = filteredTrades.sort((a, b) => a.price - b.price);
         }
 
-        res.json(filteredTrades);
+        // Вычисляем Put/Call Ratio и проценты
+        const totalCalls = trades.filter(trade => trade.instrument_name.includes('-C')).reduce((acc, trade) => acc + Number(trade.amount), 0);
+        const totalPuts = trades.filter(trade => trade.instrument_name.includes('-P')).reduce((acc, trade) => acc + Number(trade.amount), 0);
+
+        const putCallRatio = totalCalls !== 0 ? totalPuts / totalCalls : 0;
+        const total = totalCalls + totalPuts;
+        const putsPercentage = total !== 0 ? (totalPuts / total) * 100 : 0;
+        const callsPercentage = total !== 0 ? (totalCalls / total) * 100 : 0;
+
+        res.json({
+            trades: filteredTrades,
+            putCallRatio,
+            totalPuts,
+            totalCalls,
+            putsPercentage,
+            callsPercentage
+        });
     } catch (error) {
         console.error('Error fetching trades with filters:', error);
         res.status(500).json({ message: 'Failed to fetch trades', error });

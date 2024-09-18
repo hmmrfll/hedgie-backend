@@ -28,9 +28,8 @@ router.get('/strike-activity/:currency', async (req, res) => {
             GROUP BY 
                 instrument_name
             ORDER BY 
-                trade_count DESC
-            LIMIT 10;
-        `;
+                trade_count DESC;
+        `; // Удалили LIMIT 10
 
         const result = await pool.query(query);
 
