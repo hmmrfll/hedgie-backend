@@ -28,6 +28,7 @@ const openInterestHistorical = require('./routes/openInterestRoutes/openInterest
 const volumeInterestRouter = require('./routes/volumeRoutes/volumeInterestRouter');
 const volumeByExpirationRouter = require('./routes/volumeRoutes/volumeByExpirationRouter');
 const volumeByStrikeRouter = require('./routes/volumeRoutes/volumeByStrikeRouter');
+const dataDownload = require('./routes/dataLabRoutes/dataDownload');
 
 const app = express();
 
@@ -47,7 +48,7 @@ app.use('/api/open-interest', openInterest);
 app.use('/api', openInterestByExpirationRouter, openInterestByStrikeRouter, openInterestDeltaAdjusted, openInterestHistorical);
 
 app.use('/api/volume', volumeInterestRouter, volumeByExpirationRouter, volumeByStrikeRouter);
-
+app.use('/api/datalab', dataDownload);
 
 
 const PORT = process.env.PORT || 5003;
