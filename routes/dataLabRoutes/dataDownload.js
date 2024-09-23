@@ -74,6 +74,12 @@ const getData = async (dataType, timeRange) => {
             case '5d':
                 days = 5;
                 break;
+            case '6d':
+                days = 6;
+                break;
+            case '7d':
+                days = 7;
+                break;
             case '10d':
                 days = 10;
                 break;
