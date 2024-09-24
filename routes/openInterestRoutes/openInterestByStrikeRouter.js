@@ -6,7 +6,7 @@ router.get('/open-interest-by-strike/:asset/:expiration', async (req, res) => {
     const { asset, expiration } = req.params;
     try {
         // Условие для фильтрации по дате экспирации
-        const expirationCondition = expiration === 'all' ? '' : `AND instrument_name LIKE '%${expiration}%'`;
+        const expirationCondition = expiration === 'all' ? '' : `WHERE instrument_name LIKE '%${expiration}%'`;
 
         const query = `
             SELECT 
