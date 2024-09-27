@@ -11,7 +11,7 @@ router.get('/historical-open-interest/:asset/:period', async (req, res) => {
     switch (period) {
         case '1d':
             interval = '1 day';
-            groupBy = 'minute'; // Для 1 дня группируем по минутам
+            groupBy = "hour"; // Группировка по 5 минут (300 секунд)
             break;
         case '7d':
             interval = '7 days';
@@ -46,6 +46,7 @@ router.get('/historical-open-interest/:asset/:period', async (req, res) => {
         const result = await pool.query(query);
         res.json(result.rows);
     } catch (error) {
+        console.error('Error fetching historical open interest data:', error);
         res.status(500).json({ message: 'Failed to fetch historical open interest data', error });
     }
 });
