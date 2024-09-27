@@ -1,5 +1,6 @@
 const pool = require('../config/database');
 
+// Рассчет для BTC метрик
 exports.getBTCMetrics = async (req, res) => {
     try {
         console.log('Received request for BTC metrics');
@@ -16,14 +17,41 @@ exports.getBTCMetrics = async (req, res) => {
                 timestamp >= NOW() - INTERVAL '24 hours';
         `);
 
-        console.log('Query result:', result.rows[0]);
-        res.json(result.rows[0]);
+        const metrics = result.rows[0];
+
+        // Преобразуем строки в числа
+        const callBuys = parseFloat(metrics.Call_Buys) || 0;
+        const callSells = parseFloat(metrics.Call_Sells) || 0;
+        const putBuys = parseFloat(metrics.Put_Buys) || 0;
+        const putSells = parseFloat(metrics.Put_Sells) || 0;
+
+        // Вычисляем общую сумму всех метрик
+        const total = callBuys + callSells + putBuys + putSells;
+
+        console.log("Total transactions:", total); // Проверяем общую сумму
+
+        // Рассчитываем проценты для каждой метрики
+        const response = {
+            Call_Buys: callBuys,
+            Call_Sells: callSells,
+            Put_Buys: putBuys,
+            Put_Sells: putSells,
+            Call_Buys_Percent: total > 0 ? ((callBuys / total) * 100).toFixed(2) : '0.00',
+            Call_Sells_Percent: total > 0 ? ((callSells / total) * 100).toFixed(2) : '0.00',
+            Put_Buys_Percent: total > 0 ? ((putBuys / total) * 100).toFixed(2) : '0.00',
+            Put_Sells_Percent: total > 0 ? ((putSells / total) * 100).toFixed(2) : '0.00'
+        };
+
+        console.log('Query result with percentages:', response); // Выводим результат в консоль
+
+        res.json(response);
     } catch (error) {
         console.error('Error fetching BTC metrics:', error);
         res.status(500).json({ success: false, message: 'Failed to fetch BTC metrics' });
     }
 };
 
+// Рассчет для ETH метрик
 exports.getETHMetrics = async (req, res) => {
     try {
         console.log('Received request for ETH metrics');
@@ -40,8 +68,34 @@ exports.getETHMetrics = async (req, res) => {
                 timestamp >= NOW() - INTERVAL '24 hours';
         `);
 
-        console.log('Query result:', result.rows[0]);
-        res.json(result.rows[0]);
+        const metrics = result.rows[0];
+
+        // Преобразуем строки в числа
+        const callBuys = parseFloat(metrics.Call_Buys) || 0;
+        const callSells = parseFloat(metrics.Call_Sells) || 0;
+        const putBuys = parseFloat(metrics.Put_Buys) || 0;
+        const putSells = parseFloat(metrics.Put_Sells) || 0;
+
+        // Вычисляем общую сумму всех метрик
+        const total = callBuys + callSells + putBuys + putSells;
+
+        console.log("Total transactions:", total); // Проверяем общую сумму
+
+        // Рассчитываем проценты для каждой метрики
+        const response = {
+            Call_Buys: callBuys,
+            Call_Sells: callSells,
+            Put_Buys: putBuys,
+            Put_Sells: putSells,
+            Call_Buys_Percent: total > 0 ? ((callBuys / total) * 100).toFixed(2) : '0.00',
+            Call_Sells_Percent: total > 0 ? ((callSells / total) * 100).toFixed(2) : '0.00',
+            Put_Buys_Percent: total > 0 ? ((putBuys / total) * 100).toFixed(2) : '0.00',
+            Put_Sells_Percent: total > 0 ? ((putSells / total) * 100).toFixed(2) : '0.00'
+        };
+
+        console.log('Query result with percentages:', response); // Выводим результат в консоль
+
+        res.json(response);
     } catch (error) {
         console.error('Error fetching ETH metrics:', error);
         res.status(500).json({ success: false, message: 'Failed to fetch ETH metrics' });

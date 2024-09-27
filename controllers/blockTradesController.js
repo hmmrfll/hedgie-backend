@@ -14,7 +14,32 @@ const getBlockTrades = async (tableName, res) => {
                 timestamp >= NOW() - INTERVAL '24 hours';
         `);
 
-        res.json(result.rows[0]);
+        const metrics = result.rows[0];
+
+        // Преобразуем строки в числа
+        const callBuys = parseFloat(metrics.Call_Buys) || 0;
+        const callSells = parseFloat(metrics.Call_Sells) || 0;
+        const putBuys = parseFloat(metrics.Put_Buys) || 0;
+        const putSells = parseFloat(metrics.Put_Sells) || 0;
+
+        // Вычисляем общую сумму всех метрик
+        const total = callBuys + callSells + putBuys + putSells;
+
+        // Рассчитываем проценты для каждой метрики
+        const response = {
+            Call_Buys: callBuys,
+            Call_Sells: callSells,
+            Put_Buys: putBuys,
+            Put_Sells: putSells,
+            Call_Buys_Percent: total > 0 ? ((callBuys / total) * 100).toFixed(2) : '0.00',
+            Call_Sells_Percent: total > 0 ? ((callSells / total) * 100).toFixed(2) : '0.00',
+            Put_Buys_Percent: total > 0 ? ((putBuys / total) * 100).toFixed(2) : '0.00',
+            Put_Sells_Percent: total > 0 ? ((putSells / total) * 100).toFixed(2) : '0.00'
+        };
+
+        console.log(`Query result with percentages for ${tableName}:`, response);
+
+        res.json(response);
     } catch (error) {
         console.error(`Error fetching ${tableName} metrics:`, error);
         res.status(500).json({ success: false, message: `Failed to fetch ${tableName} metrics` });

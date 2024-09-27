@@ -33,17 +33,32 @@ router.get('/strike-activity/:currency', async (req, res) => {
 
         const result = await pool.query(query);
 
-        // Извлекаем strike price и option type из instrument_name
-        const dataWithStrike = result.rows.map(row => {
+        // Создадим объект для агрегации данных по страйкам и типам опционов
+        const aggregatedData = {};
+
+        result.rows.forEach(row => {
             const match = row.instrument_name.match(/(\d+)-([CP])$/); // Извлекаем цифры и тип опциона (C/P)
-            const strike_price = match ? match[1] : null;
+            const strike_price = match ? parseInt(match[1], 10) : null;
             const option_type = match ? match[2] : null;
-            return {
-                ...row,
-                strike_price: strike_price ? parseInt(strike_price, 10) : undefined,
-                option_type: option_type || undefined,
-            };
+
+            if (strike_price && option_type) {
+                const key = `${strike_price}-${option_type}`;
+
+                // Если страйк уже существует, добавляем к существующему количеству сделок
+                if (aggregatedData[key]) {
+                    aggregatedData[key].trade_count += parseInt(row.trade_count, 10);
+                } else {
+                    aggregatedData[key] = {
+                        strike_price,
+                        option_type,
+                        trade_count: parseInt(row.trade_count, 10),
+                    };
+                }
+            }
         });
+
+        // Преобразуем объект в массив для отправки на фронт
+        const dataWithStrike = Object.values(aggregatedData);
 
         res.json(dataWithStrike);
     } catch (error) {
