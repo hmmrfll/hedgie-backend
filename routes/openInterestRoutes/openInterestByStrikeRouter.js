@@ -1,10 +1,46 @@
 const express = require('express');
 const pool = require('../../config/database');
+const axios = require('axios');
 const router = express.Router();
+
+let cachedRate = null;
+let lastFetchedTime = 0;
+const CACHE_TTL = 10 * 60 * 1000; // 10 минут в миллисекундах
+
+// Функция для получения курса валюты BTC или ETH к USD с кэшированием
+async function getConversionRate(asset) {
+    const now = Date.now();
+
+    // Проверка на наличие кэшированных данных и их актуальность
+    if (cachedRate && (now - lastFetchedTime) < CACHE_TTL) {
+        return cachedRate[asset.toLowerCase()];
+    }
+
+    // Получаем курс валюты с CoinGecko
+    const btcUrl = 'https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd';
+    const ethUrl = 'https://api.coingecko.com/api/v3/simple/price?ids=ethereum&vs_currencies=usd';
+
+    const [btcResponse, ethResponse] = await Promise.all([
+        axios.get(btcUrl),
+        axios.get(ethUrl)
+    ]);
+
+    // Сохраняем курсы в кэш
+    cachedRate = {
+        btc: btcResponse.data.bitcoin.usd,
+        eth: ethResponse.data.ethereum.usd
+    };
+    lastFetchedTime = now;
+
+    return cachedRate[asset.toLowerCase()];
+}
 
 router.get('/open-interest-by-strike/:asset/:expiration', async (req, res) => {
     const { asset, expiration } = req.params;
     try {
+        // Получаем курс валюты (BTC или ETH) в долларах США
+        const conversionRate = await getConversionRate(asset);
+
         // Условие для фильтрации по дате экспирации
         const expirationCondition = expiration === 'all' ? '' : `WHERE instrument_name LIKE '%${expiration}%'`;
 
@@ -22,8 +58,19 @@ router.get('/open-interest-by-strike/:asset/:expiration', async (req, res) => {
         `;
 
         const result = await pool.query(query);
-        res.json(result.rows);
+
+        // Преобразование рыночной стоимости в доллары США
+        const data = result.rows.map(row => ({
+            strike: row.strike,
+            puts: row.puts,
+            calls: row.calls,
+            puts_market_value: (row.puts_market_value * conversionRate).toFixed(2), // Конвертация в доллары
+            calls_market_value: (row.calls_market_value * conversionRate).toFixed(2), // Конвертация в доллары
+        }));
+
+        res.json(data);
     } catch (error) {
+        console.error(`Error fetching open interest by strike for ${asset}:`, error);
         res.status(500).json({ message: 'Failed to fetch open interest data', error });
     }
 });
