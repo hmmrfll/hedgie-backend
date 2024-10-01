@@ -3,7 +3,7 @@ const pool = require('../../config/database');
 const router = express.Router();
 
 router.get('/trades', async (req, res) => {
-    const { asset, tradeType, optionType, expiration, sizeOrder, premiumOrder, limit = 25 } = req.query;
+    const { asset, limit = 25 } = req.query;
 
     let tableName = asset === 'BTC' ? 'all_btc_trades' : 'all_eth_trades';
 
@@ -13,23 +13,7 @@ router.get('/trades', async (req, res) => {
         WHERE timestamp >= NOW() - INTERVAL '24 hours'
     `;
 
-    // Фильтр по типу сделки
-    if (tradeType && tradeType !== 'Buy/Sell') {
-        query += ` AND direction = '${tradeType.toLowerCase()}'`;
-    }
-
-    // Фильтр по типу опциона (Call/Put)
-    if (optionType && optionType !== 'Call/Put') {
-        const optionFilter = optionType === 'Call' ? '-C' : '-P';
-        query += ` AND instrument_name LIKE '%${optionFilter}'`;
-    }
-
-    // Фильтр по экспирации
-    if (expiration && expiration !== 'All Expirations') {
-        query += ` AND instrument_name LIKE '%${expiration}%'`;
-    }
-
-    // Лимитируем количество строк
+    // Лимитируем количество строк для вывода сделок
     query += ` LIMIT ${Number(limit)}`;
 
     try {
@@ -47,7 +31,7 @@ router.get('/trades', async (req, res) => {
             });
         }
 
-        // Вычисляем Put to Call Ratio, Total Calls, и Total Puts
+        // Рассчитываем Total Calls, Total Puts и Put to Call Ratio на основе данных за последние 24 часа
         const totalCalls = trades.filter(trade => trade.instrument_name.includes('-C')).reduce((acc, trade) => acc + Number(trade.amount), 0);
         const totalPuts = trades.filter(trade => trade.instrument_name.includes('-P')).reduce((acc, trade) => acc + Number(trade.amount), 0);
 
