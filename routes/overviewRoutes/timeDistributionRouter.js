@@ -28,25 +28,34 @@ router.get('/time-distribution/:currency', async (req, res) => {
                 timestamp;
         `);
 
-        // Инициализация массива на 24 часа
-        const timeDistribution = Array.from({ length: 24 }, () => ({ calls: [], puts: [] }));
+        // Получаем текущий час
+        const currentHour = new Date().getUTCHours();
+
+        // Инициализация массива на 24 часа, начиная с текущего часа
+        const timeDistribution = Array.from({ length: 24 }, (_, i) => ({
+            hour: (currentHour - i + 24) % 24,  // Часы от текущего времени
+            calls: [],
+            puts: []
+        }));
 
         // Обработка каждой сделки и группировка по часам
         result.rows.forEach(row => {
-            const hour = new Date(row.timestamp).getUTCHours(); // Получаем час сделки в UTC
+            const tradeHour = new Date(row.timestamp).getUTCHours(); // Час сделки
             const tradeData = {
-                hour,  // Час сделки
                 trade_count: row.trade_count,
                 avg_index_price: row.avg_index_price,
                 type: row.instrument_name.includes('-C') ? 'call' : 'put',  // Определение Call или Put
                 direction: row.direction,
             };
 
+            // Рассчитываем индекс для корректной группировки по часам
+            const index = (currentHour - tradeHour + 24) % 24;
+
             // Группировка по типу сделки (Call/Put)
             if (tradeData.type === 'call') {
-                timeDistribution[hour].calls.push(tradeData);
+                timeDistribution[index].calls.push(tradeData);
             } else {
-                timeDistribution[hour].puts.push(tradeData);
+                timeDistribution[index].puts.push(tradeData);
             }
         });
 
