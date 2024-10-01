@@ -3,8 +3,6 @@ const pool = require('../config/database');
 // Рассчет для BTC метрик
 exports.getBTCMetrics = async (req, res) => {
     try {
-        console.log('Received request for BTC metrics');
-
         const result = await pool.query(`
             SELECT 
                 SUM(CASE WHEN instrument_name LIKE '%-C' AND direction = 'buy' THEN amount ELSE 0 END) AS "Call_Buys",
@@ -28,8 +26,6 @@ exports.getBTCMetrics = async (req, res) => {
         // Вычисляем общую сумму всех метрик
         const total = callBuys + callSells + putBuys + putSells;
 
-        console.log("Total transactions:", total); // Проверяем общую сумму
-
         // Рассчитываем проценты для каждой метрики
         const response = {
             Call_Buys: callBuys,
@@ -42,8 +38,6 @@ exports.getBTCMetrics = async (req, res) => {
             Put_Sells_Percent: total > 0 ? ((putSells / total) * 100).toFixed(2) : '0.00'
         };
 
-        console.log('Query result with percentages:', response); // Выводим результат в консоль
-
         res.json(response);
     } catch (error) {
         console.error('Error fetching BTC metrics:', error);
@@ -54,8 +48,6 @@ exports.getBTCMetrics = async (req, res) => {
 // Рассчет для ETH метрик
 exports.getETHMetrics = async (req, res) => {
     try {
-        console.log('Received request for ETH metrics');
-
         const result = await pool.query(`
             SELECT 
                 SUM(CASE WHEN instrument_name LIKE '%-C' AND direction = 'buy' THEN amount ELSE 0 END) AS "Call_Buys",
@@ -79,8 +71,6 @@ exports.getETHMetrics = async (req, res) => {
         // Вычисляем общую сумму всех метрик
         const total = callBuys + callSells + putBuys + putSells;
 
-        console.log("Total transactions:", total); // Проверяем общую сумму
-
         // Рассчитываем проценты для каждой метрики
         const response = {
             Call_Buys: callBuys,
@@ -92,8 +82,6 @@ exports.getETHMetrics = async (req, res) => {
             Put_Buys_Percent: total > 0 ? ((putBuys / total) * 100).toFixed(2) : '0.00',
             Put_Sells_Percent: total > 0 ? ((putSells / total) * 100).toFixed(2) : '0.00'
         };
-
-        console.log('Query result with percentages:', response); // Выводим результат в консоль
 
         res.json(response);
     } catch (error) {

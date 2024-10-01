@@ -32,7 +32,6 @@ router.get('/max-pain-data', async (req, res) => {
     const { currency } = req.query;
 
     try {
-        console.log(`Получен запрос на Max Pain для актива: ${currency}`);
 
         // Выбор таблицы в зависимости от валюты
         let tableName;
@@ -60,7 +59,6 @@ router.get('/max-pain-data', async (req, res) => {
                 };
             });
 
-            console.log('Возвращаем сохраненные данные из базы.');
             return res.json({ maxPainByExpiration });
         }
 
@@ -107,7 +105,6 @@ router.get('/max-pain-data', async (req, res) => {
 
         // Обновляем время последнего обновления
         lastUpdateTime = new Date();
-        console.log('Рассчитанные данные Max Pain обновлены и сохранены в базу.');
         res.json({ maxPainByExpiration });
     } catch (error) {
         console.error('Ошибка при расчете Max Pain:', error);
