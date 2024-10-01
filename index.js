@@ -14,7 +14,6 @@ const expirationActivityRouter = require('./routes/overviewRoutes/expirationActi
 const strikeRouter = require('./routes/strikeRouter');
 const timeDistributionRouter = require('./routes/overviewRoutes/timeDistributionRouter');
 const keyMetricsRouter = require('./routes/overviewRoutes/keyMetricsRouter');
-const flowDataRouter = require('./routes/flowDataRouter');
 const popularOptionsBlockTradesRouter = require('./routes/blockTradesRoutes/popularOptionsBlockTradesRouter');
 const strikeActivityBlockTradesRouter = require('./routes/blockTradesRoutes/strikeActivityBlockTradesRouter');
 const expirationActivityBlockTradesRouter = require('./routes/blockTradesRoutes/expirationActivityBlockTradesRouter');
@@ -29,6 +28,10 @@ const volumeInterestRouter = require('./routes/volumeRoutes/volumeInterestRouter
 const volumeByExpirationRouter = require('./routes/volumeRoutes/volumeByExpirationRouter');
 const volumeByStrikeRouter = require('./routes/volumeRoutes/volumeByStrikeRouter');
 const dataDownload = require('./routes/dataLabRoutes/dataDownload');
+const flowMetricsRouter = require('./routes/flowRoutes/flowMetricsRouter');
+const lastDataRouter = require('./routes/flowRoutes/lastDataRouter');
+const flowDataRouter = require('./routes/flowRoutes/flowDataRouter');
+
 
 const app = express();
 
@@ -49,6 +52,9 @@ app.use('/api', openInterestByExpirationRouter, openInterestByStrikeRouter, open
 
 app.use('/api/volume', volumeInterestRouter, volumeByExpirationRouter, volumeByStrikeRouter);
 app.use('/api/datalab', dataDownload);
+
+app.use('/api/flow', flowMetricsRouter, lastDataRouter);
+
 
 
 const PORT = process.env.PORT || 5003;
