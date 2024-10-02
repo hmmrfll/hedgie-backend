@@ -9,7 +9,7 @@ router.get('/key-metrics/:currency', async (req, res) => {
     const tableName = currency.toLowerCase() === 'btc' ? 'all_btc_trades' : 'all_eth_trades';
 
     try {
-        // Добавляем запрос для получения всех данных по сделкам за последние 24 часа
+        // Запрос для получения всех данных по сделкам за последние 24 часа
         const tradesResult = await pool.query(`
             SELECT 
                 amount, 
@@ -20,20 +20,19 @@ router.get('/key-metrics/:currency', async (req, res) => {
                 timestamp >= NOW() - INTERVAL '24 hours'
         `);
 
-        // Логируем каждую сделку для расчета Total Volume
+        // Рассчитываем общий объем (total nominal volume)
         let totalVolume = 0;
         tradesResult.rows.forEach(trade => {
             const amount = trade.amount || 0;
             const indexPrice = trade.index_price || 0;
             const volume = amount * indexPrice;
             totalVolume += volume;
-
         });
 
-        // Выполняем запрос для остальных метрик
+        // Запрос для расчета средней цены, общего объема и других метрик
         const result = await pool.query(`
             SELECT 
-                SUM(COALESCE(price * index_price, 0)) / COUNT(price) AS avg_price, -- Средняя цена сделки, пересчитанная в USD
+                SUM(COALESCE(price * amount * index_price, 0)) / COUNT(*) AS avg_price, -- Средняя цена сделки с учетом объема
                 SUM(COALESCE(amount * index_price, 0)) AS total_nominal_volume, -- Номинальный объём (в долларах): объём * индексная цена
                 SUM(COALESCE(price * amount * index_price, 0)) AS total_premium, -- Премия: цена сделки * объём * индексная цена
                 COUNT(CASE WHEN liquidation IS NOT NULL THEN 1 END) AS liquidation_count -- Количество ликвидаций

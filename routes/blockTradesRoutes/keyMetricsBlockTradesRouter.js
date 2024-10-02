@@ -32,7 +32,7 @@ router.get('/key-metrics/:currency', async (req, res) => {
         // Запрос для остальных метрик
         const result = await pool.query(`
             SELECT 
-                SUM(COALESCE(price * amount * index_price, 0)) / SUM(COALESCE(amount, 1)) AS avg_price, -- Средняя цена сделки с учетом объема
+                SUM(COALESCE(price * amount * index_price, 0)) / COUNT(*) AS avg_price, -- Средняя цена сделки
                 SUM(COALESCE(amount * index_price, 0)) AS total_nominal_volume, -- Номинальный объём (в долларах): объём * индексная цена
                 SUM(COALESCE(price * amount * index_price, 0)) AS total_premium, -- Премия: цена сделки * объём * индексная цена
                 COUNT(CASE WHEN liquidation IS NOT NULL THEN 1 END) AS liquidation_count -- Количество ликвидаций
