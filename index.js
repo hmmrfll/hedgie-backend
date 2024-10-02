@@ -31,6 +31,7 @@ const dataDownload = require('./routes/dataLabRoutes/dataDownload');
 const flowMetricsRouter = require('./routes/flowRoutes/flowMetricsRouter');
 const lastDataRouter = require('./routes/flowRoutes/lastDataRouter');
 const flowDataRouter = require('./routes/flowRoutes/flowDataRouter');
+const volumePopularOptionsRouter = require('./routes/volumeRoutes/volumePopularOptionsRouter');
 
 
 const app = express();
@@ -50,7 +51,7 @@ app.use('/api', authRoutes, maxPainRoutes, expirationRouter, strikeRouter, flowD
 app.use('/api/open-interest', openInterest);
 app.use('/api', openInterestByExpirationRouter, openInterestByStrikeRouter, openInterestDeltaAdjusted, openInterestHistorical);
 
-app.use('/api/volume', volumeInterestRouter, volumeByExpirationRouter, volumeByStrikeRouter);
+app.use('/api/volume', volumeInterestRouter, volumeByExpirationRouter, volumeByStrikeRouter, volumePopularOptionsRouter);
 app.use('/api/datalab', dataDownload);
 
 app.use('/api/flow', flowMetricsRouter, lastDataRouter);
