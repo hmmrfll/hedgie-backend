@@ -5,16 +5,16 @@ const router = express.Router();
 
 let conversionCache = {};
 
-// Функция для получения курса конверсии с кэшированием
+// Функция получения курса конверсии с кэшированием
 async function getConversionRate(assetSymbol) {
     const now = Date.now();
-    const cacheExpiration = 10 * 60 * 1000; // 10 минут кэша
+    const cacheExpiration = 10 * 60 * 1000; // Время жизни кеша 10 минут
 
     if (conversionCache[assetSymbol] && (now - conversionCache[assetSymbol].timestamp < cacheExpiration)) {
-        return conversionCache[assetSymbol].rate; // Вернуть данные из кеша
+        return conversionCache[assetSymbol].rate; // Возвращаем кешированные данные
     }
 
-    // Запрос курса валют через CoinGecko API
+    // Получаем курс через CoinGecko API
     const conversionResponse = await axios.get(`https://api.coingecko.com/api/v3/simple/price?ids=${assetSymbol}&vs_currencies=usd`);
     const conversionRate = conversionResponse.data[assetSymbol].usd;
 
@@ -26,44 +26,103 @@ async function getConversionRate(assetSymbol) {
     return conversionRate;
 }
 
+// Функция для преобразования строкового формата DDMMMYY в формат YYYY-MM-DD
+const convertToISODate = (dateStr) => {
+    const year = `20${dateStr.slice(-2)}`;
+    const monthStr = dateStr.slice(-5, -2).toUpperCase();
+    let day = dateStr.slice(0, dateStr.length - 5);
+
+    const monthMap = {
+        JAN: '01', FEB: '02', MAR: '03', APR: '04', MAY: '05', JUN: '06',
+        JUL: '07', AUG: '08', SEP: '09', OCT: '10', NOV: '11', DEC: '12'
+    };
+
+    const month = monthMap[monthStr];
+    if (!month) {
+        console.error(`Ошибка: не удалось найти месяц для строки: ${dateStr}`);
+        return null;
+    }
+
+    if (day.length === 1) {
+        day = `0${day}`;
+    }
+
+    return `${year}-${month}-${day}`;
+};
+
+// Маршрут для получения данных об открытых интересах за последние 24 часа
 router.get('/open-interest-by-expiration/:asset/:strike', async (req, res) => {
     const { asset, strike } = req.params;
     const assetSymbol = asset.toLowerCase() === 'btc' ? 'bitcoin' : 'ethereum';
+    const tableName = asset.toLowerCase() === 'btc' ? 'all_btc_trades' : 'all_eth_trades';
 
     try {
-        // Получаем курс валюты актива в доллары
+        // Получаем курс актива к доллару с кэшированием
         const conversionRate = await getConversionRate(assetSymbol);
 
         // Условие для фильтрации страйков
         const strikeCondition = strike === 'all' ? '' : `AND instrument_name LIKE '%-${strike}-%'`;
 
-        // SQL-запрос для получения данных об открытых интересах
-        const query = `
+        // Получаем данные за последние 24 часа и группируем их по дате экспирации
+        const result = await pool.query(`
             SELECT 
-                substring(instrument_name from '[0-9]{2}[A-Z]{3}[0-9]{2}') AS expiration,
+                instrument_name,
                 SUM(CASE WHEN instrument_name LIKE '%P' THEN contracts ELSE 0 END) AS puts_otm,
                 SUM(CASE WHEN instrument_name LIKE '%C' THEN contracts ELSE 0 END) AS calls_otm,
                 SUM(CASE WHEN instrument_name LIKE '%P' THEN contracts * mark_price ELSE 0 END) AS puts_market_value,
                 SUM(CASE WHEN instrument_name LIKE '%C' THEN contracts * mark_price ELSE 0 END) AS calls_market_value,
                 SUM(contracts * mark_price) AS notional_value
-            FROM ${asset.toLowerCase() === 'btc' ? 'all_btc_trades' : 'all_eth_trades'}
+            FROM ${tableName}
             WHERE timestamp >= NOW() - INTERVAL '24 hours'
             ${strikeCondition}
-            GROUP BY expiration
-            ORDER BY expiration;
-        `;
+            GROUP BY instrument_name
+            ORDER BY instrument_name;
+        `);
 
-        const result = await pool.query(query);
+        // Конвертируем рыночные значения в USD и группируем по экспирациям
+        const groupedData = {};
 
-        // Конвертируем значения в доллары США
-        const convertedData = result.rows.map(row => ({
-            ...row,
-            puts_market_value: (parseFloat(row.puts_market_value) * conversionRate).toFixed(2),
-            calls_market_value: (parseFloat(row.calls_market_value) * conversionRate).toFixed(2),
-            notional_value: (parseFloat(row.notional_value) * conversionRate).toFixed(2)
-        }));
+        result.rows.forEach(row => {
+            const match = row.instrument_name.match(/(\d{1,2}[A-Z]{3}\d{2})/); // Ищем дату экспирации
+            const expirationDate = match ? match[1] : null;
+            if (expirationDate) {
+                if (!groupedData[expirationDate]) {
+                    groupedData[expirationDate] = {
+                        puts_otm: 0,
+                        calls_otm: 0,
+                        puts_market_value: 0,
+                        calls_market_value: 0,
+                        notional_value: 0,
+                    };
+                }
 
-        res.json(convertedData);
+                // Суммируем значения для текущей даты экспирации
+                groupedData[expirationDate].puts_otm += parseFloat(row.puts_otm);
+                groupedData[expirationDate].calls_otm += parseFloat(row.calls_otm);
+                groupedData[expirationDate].puts_market_value += parseFloat(row.puts_market_value) * conversionRate;
+                groupedData[expirationDate].calls_market_value += parseFloat(row.calls_market_value) * conversionRate;
+                groupedData[expirationDate].notional_value += parseFloat(row.notional_value) * conversionRate;
+            }
+        });
+
+        // Округляем конечные значения до двух знаков после запятой
+        Object.keys(groupedData).forEach(expiration => {
+            groupedData[expiration].puts_otm = groupedData[expiration].puts_otm.toFixed(2);
+            groupedData[expiration].calls_otm = groupedData[expiration].calls_otm.toFixed(2);
+            groupedData[expiration].puts_market_value = groupedData[expiration].puts_market_value.toFixed(2);
+            groupedData[expiration].calls_market_value = groupedData[expiration].calls_market_value.toFixed(2);
+            groupedData[expiration].notional_value = groupedData[expiration].notional_value.toFixed(2);
+        });
+
+        // Сортировка по хронологическому порядку
+        const sortedGroupedData = Object.keys(groupedData)
+            .sort((a, b) => new Date(convertToISODate(a)) - new Date(convertToISODate(b)))
+            .reduce((sortedObj, key) => {
+                sortedObj[key] = groupedData[key];
+                return sortedObj;
+            }, {});
+
+        res.json(sortedGroupedData);
     } catch (error) {
         console.error('Ошибка при получении данных об открытых интересах:', error.message);
         res.status(500).json({ message: 'Failed to fetch open interest data', error });
