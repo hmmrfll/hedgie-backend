@@ -4,7 +4,16 @@ const router = express.Router();
 
 router.get('/strike-activity/:currency', async (req, res) => {
     const { currency } = req.params;
-    const { expiration } = req.query; // Дата экспирации, если выбрана
+    const { expiration, timeRange } = req.query; // Получаем дату экспирации и временной интервал
+
+    let interval = '24 hours'; // По умолчанию - последние 24 часа
+
+    // Определяем интервал времени на основе выбора пользователя
+    if (timeRange === '7d') {
+        interval = '7 days';
+    } else if (timeRange === '30d') {
+        interval = '30 days';
+    }
 
     const tableName = currency.toLowerCase() === 'btc' ? 'btc_block_trades' : 'eth_block_trades';
 
@@ -16,7 +25,7 @@ router.get('/strike-activity/:currency', async (req, res) => {
             FROM 
                 ${tableName}
             WHERE 
-                timestamp >= NOW() - INTERVAL '24 hours'
+                timestamp >= NOW() - INTERVAL '${interval}'
         `;
 
         // Фильтрация по дате экспирации, если она выбрана

@@ -2,14 +2,23 @@ const express = require('express');
 const pool = require('../../config/database');
 const router = express.Router();
 
-// Получение основных метрик для BTC/ETH за последние 24 часа
 router.get('/key-metrics/:currency', async (req, res) => {
     const { currency } = req.params;
+    const { timeRange } = req.query; // Получаем временной интервал из запроса
+
+    let interval = '24 hours'; // По умолчанию - последние 24 часа
+
+    // Определяем интервал времени на основе выбора пользователя
+    if (timeRange === '7d') {
+        interval = '7 days';
+    } else if (timeRange === '30d') {
+        interval = '30 days';
+    }
 
     const tableName = currency.toLowerCase() === 'btc' ? 'all_btc_trades' : 'all_eth_trades';
 
     try {
-        // Запрос для получения всех данных по сделкам за последние 24 часа
+        // Запрос для получения всех данных по сделкам за выбранный интервал времени
         const tradesResult = await pool.query(`
             SELECT 
                 amount, 
@@ -17,7 +26,7 @@ router.get('/key-metrics/:currency', async (req, res) => {
             FROM 
                 ${tableName}
             WHERE 
-                timestamp >= NOW() - INTERVAL '24 hours'
+                timestamp >= NOW() - INTERVAL '${interval}'
         `);
 
         // Рассчитываем общий объем (total nominal volume)
@@ -39,7 +48,7 @@ router.get('/key-metrics/:currency', async (req, res) => {
             FROM 
                 ${tableName}
             WHERE 
-                timestamp >= NOW() - INTERVAL '24 hours'
+                timestamp >= NOW() - INTERVAL '${interval}'
         `);
 
         const data = result.rows[0];

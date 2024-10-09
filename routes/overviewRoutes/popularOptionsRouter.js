@@ -1,16 +1,25 @@
 const express = require('express');
-const pool = require('../../config/database'); // Assuming you have the database config set up
+const pool = require('../../config/database');
 const router = express.Router();
 
 // Route to get popular options for a specific currency (BTC/ETH)
 router.get('/popular-options/:currency', async (req, res) => {
     const { currency } = req.params;
+    const { timeRange } = req.query; // Получаем параметр временного интервала из запроса
+    let interval = '24 hours'; // По умолчанию берем последние 24 часа
 
-    // Determine the correct table based on currency
+    // Определяем временной интервал на основе параметра
+    if (timeRange === '7d') {
+        interval = '7 days';
+    } else if (timeRange === '30d') {
+        interval = '30 days';
+    }
+
+    // Определяем нужную таблицу на основе валюты (BTC или ETH)
     const tableName = currency.toLowerCase() === 'btc' ? 'all_btc_trades' : 'all_eth_trades';
 
     try {
-        // Fetch the popular options based on instrument_name and count the number of trades
+        // Запрос для получения популярных опционов на основе их названия и количества сделок
         const result = await pool.query(`
             SELECT 
                 instrument_name, 
@@ -18,7 +27,7 @@ router.get('/popular-options/:currency', async (req, res) => {
             FROM 
                 ${tableName}
             WHERE 
-                timestamp >= NOW() - INTERVAL '24 hours'
+                timestamp >= NOW() - INTERVAL '${interval}'
             GROUP BY 
                 instrument_name
             ORDER BY 

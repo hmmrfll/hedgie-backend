@@ -28,6 +28,17 @@ const convertToISODate = (dateStr) => {
 // Получение количества сделок по каждой дате истечения для конкретной валюты и страйка
 router.get('/expiration-activity/:currency/:strike?', async (req, res) => {
     const { currency, strike } = req.params;
+    const { timeRange } = req.query; // Получаем параметр временного интервала из запроса
+
+    let interval = '24 hours'; // По умолчанию - последние 24 часа
+
+    // Определяем интервал времени на основе выбора пользователя
+    if (timeRange === '7d') {
+        interval = '7 days';
+    } else if (timeRange === '30d') {
+        interval = '30 days';
+    }
+
     const tableName = currency.toLowerCase() === 'btc' ? 'all_btc_trades' : 'all_eth_trades';
 
     try {
@@ -39,7 +50,7 @@ router.get('/expiration-activity/:currency/:strike?', async (req, res) => {
             FROM 
                 ${tableName}
             WHERE 
-                1=1
+                timestamp >= NOW() - INTERVAL '${interval}'
         `;
 
         // Если указан страйк и он не "all", добавляем условие фильтрации по страйку

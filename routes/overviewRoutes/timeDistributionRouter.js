@@ -2,29 +2,38 @@ const express = require('express');
 const pool = require('../../config/database');
 const router = express.Router();
 
-// Получение количества сделок по часовым интервалам для каждого актива
 router.get('/time-distribution/:currency', async (req, res) => {
     const { currency } = req.params;
+    const { timeRange } = req.query; // Получаем параметр временного интервала из запроса
+
+    let interval = '24 hours'; // По умолчанию - последние 24 часа
+
+    // Определяем интервал времени на основе выбора пользователя
+    if (timeRange === '7d') {
+        interval = '7 days';
+    } else if (timeRange === '30d') {
+        interval = '30 days';
+    }
 
     // Определение таблицы в зависимости от валюты
     const tableName = currency.toLowerCase() === 'btc' ? 'all_btc_trades' : 'all_eth_trades';
 
     try {
-        // Запрос данных за последние 24 часа с группировкой по timestamp
+        // Запрос данных за выбранный интервал времени с группировкой по timestamp
         const result = await pool.query(`
-            SELECT 
-                timestamp, 
-                instrument_name, 
-                direction, 
-                COUNT(*) AS trade_count, 
+            SELECT
+                timestamp,
+                instrument_name,
+                direction,
+                COUNT(*) AS trade_count,
                 AVG(index_price) AS avg_index_price
-            FROM 
+            FROM
                 ${tableName}
-            WHERE 
-                timestamp >= NOW() - INTERVAL '24 hours'
-            GROUP BY 
+            WHERE
+                timestamp >= NOW() - INTERVAL '${interval}'
+            GROUP BY
                 timestamp, instrument_name, direction
-            ORDER BY 
+            ORDER BY
                 timestamp;
         `);
 
@@ -67,3 +76,4 @@ router.get('/time-distribution/:currency', async (req, res) => {
 });
 
 module.exports = router;
+

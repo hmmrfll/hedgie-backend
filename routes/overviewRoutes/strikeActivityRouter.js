@@ -4,7 +4,16 @@ const router = express.Router();
 
 router.get('/strike-activity/:currency', async (req, res) => {
     const { currency } = req.params;
-    const { expiration } = req.query; // Дата экспирации, если выбрана
+    const { expiration, timeRange } = req.query; // Получаем параметры временного интервала и экспирации
+
+    let interval = '24 hours'; // По умолчанию - последние 24 часа
+
+    // Определяем интервал на основе выбранного времени
+    if (timeRange === '7d') {
+        interval = '7 days';
+    } else if (timeRange === '30d') {
+        interval = '30 days';
+    }
 
     const tableName = currency.toLowerCase() === 'btc' ? 'all_btc_trades' : 'all_eth_trades';
 
@@ -16,7 +25,7 @@ router.get('/strike-activity/:currency', async (req, res) => {
             FROM 
                 ${tableName}
             WHERE 
-                timestamp >= NOW() - INTERVAL '24 hours'
+                timestamp >= NOW() - INTERVAL '${interval}'
         `;
 
         // Фильтрация по дате экспирации, если она выбрана
@@ -29,15 +38,15 @@ router.get('/strike-activity/:currency', async (req, res) => {
                 instrument_name
             ORDER BY 
                 trade_count DESC;
-        `; // Удалили LIMIT 10
+        `;
 
         const result = await pool.query(query);
 
-        // Создадим объект для агрегации данных по страйкам и типам опционов
+        // Создаем объект для агрегации данных по страйкам и типам опционов
         const aggregatedData = {};
 
         result.rows.forEach(row => {
-            const match = row.instrument_name.match(/(\d+)-([CP])$/); // Извлекаем цифры и тип опциона (C/P)
+            const match = row.instrument_name.match(/(\d+)-([CP])$/); // Извлекаем страйк и тип опциона (C/P)
             const strike_price = match ? parseInt(match[1], 10) : null;
             const option_type = match ? match[2] : null;
 

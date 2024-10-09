@@ -2,14 +2,23 @@ const express = require('express');
 const pool = require('../../config/database');
 const router = express.Router();
 
-// Получение основных метрик для BTC/ETH за последние 24 часа
 router.get('/key-metrics/:currency', async (req, res) => {
     const { currency } = req.params;
+    const { timeRange } = req.query; // Получаем временной интервал из запроса
+
+    let interval = '24 hours'; // По умолчанию - последние 24 часа
+
+    // Определяем интервал времени на основе выбора пользователя
+    if (timeRange === '7d') {
+        interval = '7 days';
+    } else if (timeRange === '30d') {
+        interval = '30 days';
+    }
 
     const tableName = currency.toLowerCase() === 'btc' ? 'btc_block_trades' : 'eth_block_trades';
 
     try {
-        // Запрос для получения всех данных по сделкам за последние 24 часа
+        // Запрос для получения всех данных по сделкам за выбранный интервал времени
         const tradesResult = await pool.query(`
             SELECT 
                 amount, 
@@ -17,7 +26,7 @@ router.get('/key-metrics/:currency', async (req, res) => {
             FROM 
                 ${tableName}
             WHERE 
-                timestamp >= NOW() - INTERVAL '24 hours'
+                timestamp >= NOW() - INTERVAL '${interval}'
         `);
 
         // Рассчитываем общий объем (total nominal volume)
@@ -29,17 +38,17 @@ router.get('/key-metrics/:currency', async (req, res) => {
             totalVolume += volume;
         });
 
-        // Запрос для остальных метрик
+        // Запрос для расчета средней цены, общего объема и других метрик
         const result = await pool.query(`
             SELECT 
-                SUM(COALESCE(price * amount * index_price, 0)) / COUNT(*) AS avg_price, -- Средняя цена сделки
+                SUM(COALESCE(price * amount * index_price, 0)) / COUNT(*) AS avg_price, -- Средняя цена сделки с учетом объема
                 SUM(COALESCE(amount * index_price, 0)) AS total_nominal_volume, -- Номинальный объём (в долларах): объём * индексная цена
                 SUM(COALESCE(price * amount * index_price, 0)) AS total_premium, -- Премия: цена сделки * объём * индексная цена
                 COUNT(CASE WHEN liquidation IS NOT NULL THEN 1 END) AS liquidation_count -- Количество ликвидаций
             FROM 
                 ${tableName}
             WHERE 
-                timestamp >= NOW() - INTERVAL '24 hours'
+                timestamp >= NOW() - INTERVAL '${interval}'
         `);
 
         const data = result.rows[0];

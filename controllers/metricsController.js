@@ -1,7 +1,17 @@
 const pool = require('../config/database');
 
-// Рассчет для BTC метрик
+// Получение метрик для BTC с учетом временного интервала
 exports.getBTCMetrics = async (req, res) => {
+    const { timeRange } = req.query; // Получаем параметр временного интервала из запроса
+    let interval = '24 hours'; // Значение по умолчанию - последние 24 часа
+
+    // Меняем интервал в зависимости от выбранного значения
+    if (timeRange === '7d') {
+        interval = '7 days';
+    } else if (timeRange === '30d') {
+        interval = '30 days';
+    }
+
     try {
         const result = await pool.query(`
             SELECT 
@@ -12,18 +22,16 @@ exports.getBTCMetrics = async (req, res) => {
             FROM 
                 all_btc_trades
             WHERE 
-                timestamp >= NOW() - INTERVAL '24 hours';
+                timestamp >= NOW() - INTERVAL '${interval}';
         `);
 
         const metrics = result.rows[0];
 
-        // Преобразуем строки в числа
+        // Преобразуем строки в числа и рассчитываем общую сумму всех метрик
         const callBuys = parseFloat(metrics.Call_Buys) || 0;
         const callSells = parseFloat(metrics.Call_Sells) || 0;
         const putBuys = parseFloat(metrics.Put_Buys) || 0;
         const putSells = parseFloat(metrics.Put_Sells) || 0;
-
-        // Вычисляем общую сумму всех метрик
         const total = callBuys + callSells + putBuys + putSells;
 
         // Рассчитываем проценты для каждой метрики
@@ -45,8 +53,18 @@ exports.getBTCMetrics = async (req, res) => {
     }
 };
 
-// Рассчет для ETH метрик
+// Получение метрик для ETH с учетом временного интервала
 exports.getETHMetrics = async (req, res) => {
+    const { timeRange } = req.query; // Получаем параметр временного интервала из запроса
+    let interval = '24 hours'; // Значение по умолчанию - последние 24 часа
+
+    // Меняем интервал в зависимости от выбранного значения
+    if (timeRange === '7d') {
+        interval = '7 days';
+    } else if (timeRange === '30d') {
+        interval = '30 days';
+    }
+
     try {
         const result = await pool.query(`
             SELECT 
@@ -57,18 +75,16 @@ exports.getETHMetrics = async (req, res) => {
             FROM 
                 all_eth_trades
             WHERE 
-                timestamp >= NOW() - INTERVAL '24 hours';
+                timestamp >= NOW() - INTERVAL '${interval}';
         `);
 
         const metrics = result.rows[0];
 
-        // Преобразуем строки в числа
+        // Преобразуем строки в числа и рассчитываем общую сумму всех метрик
         const callBuys = parseFloat(metrics.Call_Buys) || 0;
         const callSells = parseFloat(metrics.Call_Sells) || 0;
         const putBuys = parseFloat(metrics.Put_Buys) || 0;
         const putSells = parseFloat(metrics.Put_Sells) || 0;
-
-        // Вычисляем общую сумму всех метрик
         const total = callBuys + callSells + putBuys + putSells;
 
         // Рассчитываем проценты для каждой метрики

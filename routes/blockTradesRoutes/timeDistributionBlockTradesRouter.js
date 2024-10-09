@@ -2,43 +2,54 @@ const express = require('express');
 const pool = require('../../config/database');
 const router = express.Router();
 
-// Получение количества сделок по часовым интервалам для каждого актива
 router.get('/time-distribution/:currency', async (req, res) => {
     const { currency } = req.params;
+    const { timeRange } = req.query; // Получаем параметр временного интервала из запроса
+
+    let interval = '24 hours'; // По умолчанию - последние 24 часа
+
+    // Определяем интервал времени на основе выбора пользователя
+    if (timeRange === '7d') {
+        interval = '7 days';
+    } else if (timeRange === '30d') {
+        interval = '30 days';
+    }
 
     // Определение таблицы в зависимости от валюты
     const tableName = currency.toLowerCase() === 'btc' ? 'btc_block_trades' : 'eth_block_trades';
 
     try {
-        // Запрос данных за последние 24 часа с группировкой по timestamp
+        // Запрос данных за выбранный интервал времени с группировкой по timestamp
         const result = await pool.query(`
-            SELECT 
-                timestamp, 
-                instrument_name, 
-                direction, 
-                COUNT(*) AS trade_count, 
+            SELECT
+                timestamp,
+                instrument_name,
+                direction,
+                COUNT(*) AS trade_count,
                 AVG(index_price) AS avg_index_price
-            FROM 
+            FROM
                 ${tableName}
-            WHERE 
-                timestamp >= NOW() - INTERVAL '24 hours'
-            GROUP BY 
+            WHERE
+                timestamp >= NOW() - INTERVAL '${interval}'
+            GROUP BY
                 timestamp, instrument_name, direction
-            ORDER BY 
+            ORDER BY
                 timestamp;
         `);
 
-        // Инициализация массива на 24 часа с учетом текущего времени
-        const currentHour = new Date().getUTCHours(); // Текущий час в UTC
+        // Получаем текущий час
+        const currentHour = new Date().getUTCHours();
+
+        // Инициализация массива на 24 часа, начиная с текущего часа
         const timeDistribution = Array.from({ length: 24 }, (_, i) => ({
-            hour: (currentHour - i + 24) % 24, // Рассчитываем сдвиг относительно текущего часа
+            hour: (currentHour - i + 24) % 24,  // Часы от текущего времени
             calls: [],
-            puts: [],
-        })).reverse(); // Реверсируем массив, чтобы текущий час был последним
+            puts: []
+        }));
 
         // Обработка каждой сделки и группировка по часам
         result.rows.forEach(row => {
-            const hour = new Date(row.timestamp).getUTCHours(); // Получаем час сделки в UTC
+            const tradeHour = new Date(row.timestamp).getUTCHours(); // Час сделки
             const tradeData = {
                 trade_count: row.trade_count,
                 avg_index_price: row.avg_index_price,
@@ -46,14 +57,14 @@ router.get('/time-distribution/:currency', async (req, res) => {
                 direction: row.direction,
             };
 
-            // Находим соответствующий час в timeDistribution
-            const hourIndex = (currentHour - hour + 24) % 24;
+            // Рассчитываем индекс для корректной группировки по часам
+            const index = (currentHour - tradeHour + 24) % 24;
 
             // Группировка по типу сделки (Call/Put)
             if (tradeData.type === 'call') {
-                timeDistribution[hourIndex].calls.push(tradeData);
+                timeDistribution[index].calls.push(tradeData);
             } else {
-                timeDistribution[hourIndex].puts.push(tradeData);
+                timeDistribution[index].puts.push(tradeData);
             }
         });
 
@@ -65,3 +76,4 @@ router.get('/time-distribution/:currency', async (req, res) => {
 });
 
 module.exports = router;
+
