@@ -22,7 +22,6 @@ router.get('/delta-adjusted-open-interest-by-strike/:asset/:expiration', async (
         `;
 
         // Выполнение запроса
-        console.log('Generated SQL query:', query); // Лог для проверки
         const result = await pool.query(query);
         res.json(result.rows);
     } catch (error) {

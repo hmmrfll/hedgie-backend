@@ -42,10 +42,11 @@ router.get('/expiration-activity/:currency/:strike?', async (req, res) => {
     const tableName = currency.toLowerCase() === 'btc' ? 'all_btc_trades' : 'all_eth_trades';
 
     try {
+        // Извлекаем только дату истечения из названия инструмента и тип опциона
         let query = `
             SELECT 
-                instrument_name,
-                direction,
+                SUBSTRING(instrument_name FROM '([0-9]{1,2}[A-Z]{3}[0-9]{2})') AS expiration_date,
+                CASE WHEN instrument_name LIKE '%-C' THEN 'call' ELSE 'put' END AS option_type,
                 COUNT(*) AS trade_count
             FROM 
                 ${tableName}
@@ -60,43 +61,41 @@ router.get('/expiration-activity/:currency/:strike?', async (req, res) => {
 
         query += `
             GROUP BY 
-                instrument_name, direction
+                expiration_date, option_type
             ORDER BY 
-                instrument_name;
+                expiration_date;
         `;
 
         const result = await pool.query(query);
 
         // Преобразуем данные для извлечения даты истечения и делим на Calls и Puts
-        const data = result.rows.map(row => {
-            const match = row.instrument_name.match(/(\d{1,2}[A-Z]{3}\d{2})/); // Ищем даты в формате DDMMMYY
-            const expiration_date = match ? match[1] : null;
+        const data = result.rows.map(row => ({
+            expiration_date: row.expiration_date,
+            option_type: row.option_type,
+            trade_count: parseInt(row.trade_count)
+        }));
 
-            return {
-                expiration_date,
-                trade_count: row.trade_count,
-                type: row.instrument_name.includes('-C') ? 'call' : 'put',
-                direction: row.direction
-            };
-        });
+        // Группировка данных по дате истечения и типу опциона (Call/Put)
+        const groupedData = data.reduce((acc, item) => {
+            const key = `${item.expiration_date}_${item.option_type}`;
+            if (!acc[key]) {
+                acc[key] = {
+                    expiration_date: item.expiration_date,
+                    option_type: item.option_type,
+                    trade_count: 0
+                };
+            }
+            acc[key].trade_count += item.trade_count;
+            return acc;
+        }, {});
 
-        // Получаем текущую дату для фильтрации по истекшим датам
-        const currentDate = new Date();
+        // Преобразование обратно в массив
+        const groupedArray = Object.values(groupedData);
 
-        // Фильтруем по актуальным датам и делим по типам
-        const filteredData = data.filter(item => {
-            const isoDate = convertToISODate(item.expiration_date);
-            return isoDate && new Date(isoDate) >= currentDate;
-        });
+        // Сортировка по дате истечения
+        const sortedData = groupedArray.sort((a, b) => new Date(convertToISODate(a.expiration_date)) - new Date(convertToISODate(b.expiration_date)));
 
-        const calls = filteredData.filter(item => item.type === 'call');
-        const puts = filteredData.filter(item => item.type === 'put');
-
-        // Сортируем по дате истечения
-        const sortedCalls = calls.sort((a, b) => new Date(convertToISODate(a.expiration_date)) - new Date(convertToISODate(b.expiration_date)));
-        const sortedPuts = puts.sort((a, b) => new Date(convertToISODate(a.expiration_date)) - new Date(convertToISODate(b.expiration_date)));
-
-        res.json({ calls: sortedCalls, puts: sortedPuts });
+        res.json(sortedData);
     } catch (error) {
         console.error(`Error fetching expiration activity for ${currency}:`, error);
         res.status(500).json({ message: 'Failed to fetch expiration activity', error });

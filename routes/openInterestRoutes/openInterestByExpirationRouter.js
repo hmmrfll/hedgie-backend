@@ -131,9 +131,6 @@ router.get('/open-interest-by-expiration/:asset/:strike', async (req, res) => {
                 return sortedObj;
             }, {});
 
-        // Логирование конечных данных перед отправкой
-        console.log('Отправляемые данные:', JSON.stringify(sortedGroupedData, null, 2));
-
         res.json(sortedGroupedData);
     } catch (error) {
         console.error('Ошибка при получении данных об открытых интересах:', error.message);

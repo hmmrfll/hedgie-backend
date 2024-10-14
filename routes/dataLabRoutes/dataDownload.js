@@ -4,17 +4,12 @@ const pool = require('../../config/database'); // Импортируем pool д
 
 // Роутер для скачивания данных
 router.get('/data-download/:dataType/:timeRange', async (req, res) => {
-    console.log('Получен запрос на /data-download'); // Логируем факт получения запроса
     const { dataType, timeRange } = req.params;
     const { checkOnly } = req.query;
 
     try {
-        console.log('Обработка запроса:', dataType, timeRange, checkOnly);
-
         // Получение данных
         const data = await getData(dataType, timeRange);
-        console.log('Данные успешно извлечены:', data.length); // Логируем количество извлеченных строк
-
         if (!data || data.length === 0) {
             if (checkOnly === 'true') {
                 return res.status(204).send();
@@ -99,7 +94,6 @@ const getData = async (dataType, timeRange) => {
 
         // Выполнение запроса для получения данных
         const query = `SELECT * FROM ${tableName} WHERE timestamp >= $1 AND timestamp <= $2`;
-        console.log(`Выполняется запрос: ${query} с параметрами: ${startDate}, ${endDate}`); // Отладка
         const result = await pool.query(query, [startDate, endDate]); // Используем pool.query для выполнения запроса
 
         // Проверка результата
@@ -107,9 +101,6 @@ const getData = async (dataType, timeRange) => {
             console.log('Запрос не вернул результат');
             throw new Error('Query returned no result');
         }
-
-        // Отладка: выводим количество полученных строк
-        console.log(`Количество полученных строк: ${result.rows.length}`);
 
         return result.rows;
     } catch (error) {

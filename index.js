@@ -32,6 +32,8 @@ const flowMetricsRouter = require('./routes/flowRoutes/flowMetricsRouter');
 const lastDataRouter = require('./routes/flowRoutes/lastDataRouter');
 const flowDataRouter = require('./routes/flowRoutes/flowDataRouter');
 const volumePopularOptionsRouter = require('./routes/volumeRoutes/volumePopularOptionsRouter');
+const popularOptionByVolumeRouter = require('./routes/overviewRoutes/popularOptionByVolumeRouter');
+const popularOptionByVolumeBlockTradesRouter = require('./routes/blockTradesRoutes/popularOptionByVolumeBlockTradesRouter');
 
 
 const app = express();
@@ -44,12 +46,12 @@ app.use(cors({
 
 app.use(express.json());
 
-app.use('/api/metrics', metricsRoutes, popularOptionsRouter ,strikeActivityRouter, expirationActivityRouter, timeDistributionRouter,keyMetricsRouter);
-app.use('/api/block-trades', blockTradesRouter, popularOptionsBlockTradesRouter, strikeActivityBlockTradesRouter, expirationActivityBlockTradesRouter, timeDistributionBlockTradesRouter, keyMetricsBlockTradesRouter);
+app.use('/api/metrics', metricsRoutes, popularOptionsRouter ,strikeActivityRouter, expirationActivityRouter, timeDistributionRouter,keyMetricsRouter, popularOptionByVolumeRouter);
+app.use('/api/block-trades', blockTradesRouter, popularOptionsBlockTradesRouter, strikeActivityBlockTradesRouter, expirationActivityBlockTradesRouter, timeDistributionBlockTradesRouter, keyMetricsBlockTradesRouter, popularOptionByVolumeBlockTradesRouter);
 app.use('/api', authRoutes, maxPainRoutes, expirationRouter, strikeRouter, flowDataRouter);
 // for open interest
-app.use('/api/open-interest', openInterest);
-app.use('/api', openInterestByExpirationRouter, openInterestByStrikeRouter, openInterestDeltaAdjusted, openInterestHistorical);
+app.use('/api/open-interest', openInterest, openInterestByExpirationRouter, openInterestByStrikeRouter);
+app.use('/api', openInterestDeltaAdjusted, openInterestHistorical);
 
 app.use('/api/volume', volumeInterestRouter, volumeByExpirationRouter, volumeByStrikeRouter, volumePopularOptionsRouter);
 app.use('/api/datalab', dataDownload);

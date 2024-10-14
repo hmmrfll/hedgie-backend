@@ -18,10 +18,8 @@ router.get('/open-interest/:asset/:expiration', async (req, res) => {
 
         // Добавляем фильтр по expiration, если оно не "all"
         if (expiration !== 'all') {
-            console.log(`Applying expiration filter: ${expiration}`);
             query += ` AND instrument_name LIKE '%-${expiration}-%'`;
         } else {
-            console.log('No expiration filter applied');
         }
 
         query += ` GROUP BY instrument_name`;
