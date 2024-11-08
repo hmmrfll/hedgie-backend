@@ -1,14 +1,12 @@
 const express = require('express');
 const router = express.Router();
-const pool = require('../../config/database'); // Импортируем pool для выполнения запросов к базе данных
+const pool = require('../../config/database');
 
-// Роутер для скачивания данных
 router.get('/data-download/:dataType/:timeRange', async (req, res) => {
     const { dataType, timeRange } = req.params;
     const { checkOnly } = req.query;
 
     try {
-        // Получение данных
         const data = await getData(dataType, timeRange);
         if (!data || data.length === 0) {
             if (checkOnly === 'true') {
@@ -22,17 +20,15 @@ router.get('/data-download/:dataType/:timeRange', async (req, res) => {
             return res.status(200).json({ message: 'Data is available.' });
         }
 
-        // Возвращаем данные в формате JSON
         res.status(200).json(data);
     } catch (error) {
-        console.error('Ошибка при скачивании данных:', error.message); // Добавляем больше информации об ошибке
+        console.error('Ошибка при скачивании данных:', error.message);
         res.status(500).json({ message: 'Error downloading data', error: error.message });
     }
 });
 
 const getData = async (dataType, timeRange) => {
     try {
-        // Определение таблицы на основе выбранного типа данных
         let tableName;
         switch (dataType) {
             case 'All BTC Trades':
@@ -51,7 +47,6 @@ const getData = async (dataType, timeRange) => {
                 throw new Error('Invalid data type');
         }
 
-        // Определение временного диапазона
         let days;
         switch (timeRange) {
             case '1d':
@@ -92,11 +87,9 @@ const getData = async (dataType, timeRange) => {
         const startDate = new Date();
         startDate.setDate(endDate.getDate() - days);
 
-        // Выполнение запроса для получения данных
         const query = `SELECT * FROM ${tableName} WHERE timestamp >= $1 AND timestamp <= $2`;
-        const result = await pool.query(query, [startDate, endDate]); // Используем pool.query для выполнения запроса
+        const result = await pool.query(query, [startDate, endDate]);
 
-        // Проверка результата
         if (!result) {
             console.log('Запрос не вернул результат');
             throw new Error('Query returned no result');
@@ -104,7 +97,7 @@ const getData = async (dataType, timeRange) => {
 
         return result.rows;
     } catch (error) {
-        console.error('Ошибка при получении данных из базы данных:', error.message); // Добавлено подробное логирование
+        console.error('Ошибка при получении данных из базы данных:', error.message);
         throw error;
     }
 };

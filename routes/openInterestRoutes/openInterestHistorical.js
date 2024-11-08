@@ -2,42 +2,66 @@ const express = require('express');
 const pool = require('../../config/database');
 const router = express.Router();
 
+// Функция для определения таблицы на основе биржи и актива
+const getTableName = (exchange, asset) => {
+    const exchangeTables = {
+        OKX: {
+            btc: 'okx_btc_trades',
+            eth: 'okx_eth_trades',
+        },
+        DER: {
+            btc: 'all_btc_trades',
+            eth: 'all_eth_trades',
+        },
+    };
+
+    const lowerCaseAsset = asset.toLowerCase();
+    return exchangeTables[exchange]?.[lowerCaseAsset] || null;
+};
+
 router.get('/historical-open-interest/:asset/:period', async (req, res) => {
     const { asset, period } = req.params;
+    const { exchange } = req.query;
 
-    // Определяем временной интервал для фильтрации и группировки
     let interval;
     let groupBy;
     switch (period) {
         case '1d':
             interval = '1 day';
-            groupBy = "hour"; // Группировка по 5 минут (300 секунд)
+            groupBy = "hour";
             break;
         case '7d':
             interval = '7 days';
-            groupBy = 'hour'; // Для 7 дней группируем по часам
+            groupBy = 'hour';
             break;
         case '1m':
             interval = '1 month';
-            groupBy = 'day'; // Для 1 месяца группируем по дням
+            groupBy = 'day';
             break;
         default:
-            interval = ''; // Для 'All' — нет фильтрации
-            groupBy = 'week'; // Для всех данных — группируем по неделям
+            interval = '';
+            groupBy = 'week';
             break;
     }
 
+    const tableName = getTableName(exchange, asset);
+    if (!tableName) {
+        console.error('Invalid exchange or asset specified');
+        return res.status(400).json({ message: 'Invalid exchange or asset specified' });
+    }
+
     try {
-        // Фильтруем по временному интервалу, если он задан
         const timeCondition = interval ? `WHERE timestamp >= NOW() - INTERVAL '${interval}'` : '';
 
-        // Группируем данные по выбранному интервалу
+        // Определяем поле для количества контрактов в зависимости от биржи
+        const contractField = exchange === 'OKX' ? 'amount' : 'contracts';
+
         const query = `
             SELECT 
                 date_trunc('${groupBy}', timestamp) AS timestamp, -- Округляем до выбранного интервала
-                SUM(contracts) as total_contracts,
+                SUM(${contractField}) as total_contracts,
                 AVG(index_price) as avg_index_price
-            FROM ${asset.toLowerCase() === 'btc' ? 'all_btc_trades' : 'all_eth_trades'}
+            FROM ${tableName}
             ${timeCondition}
             GROUP BY date_trunc('${groupBy}', timestamp) -- Группируем по выбранному интервалу
             ORDER BY timestamp;

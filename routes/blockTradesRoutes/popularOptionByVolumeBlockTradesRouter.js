@@ -3,24 +3,20 @@ const pool = require('../../config/database');
 const router = express.Router();
 
 
-// Route to get option volumes for a specific currency (BTC/ETH)
 router.get('/option-volumes/:currency', async (req, res) => {
     const { currency } = req.params;
-    const { timeRange } = req.query; // Получаем параметр временного интервала из запроса
-    let interval = '24 hours'; // По умолчанию берем последние 24 часа
+    const { timeRange } = req.query;
+    let interval = '24 hours';
 
-    // Определяем временной интервал на основе параметра
     if (timeRange === '7d') {
         interval = '7 days';
     } else if (timeRange === '30d') {
         interval = '30 days';
     }
 
-    // Определяем нужную таблицу на основе валюты (BTC или ETH)
     const tableName = currency.toLowerCase() === 'btc' ? 'btc_block_trades' : 'eth_block_trades';
 
     try {
-        // Запрос для получения объемов сделок
         const result = await pool.query(`
             SELECT 
                 instrument_name, 

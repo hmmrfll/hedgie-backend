@@ -2,12 +2,10 @@ const express = require('express');
 const pool = require('../../config/database');
 const router = express.Router();
 
-// Route to get popular options for a specific currency (BTC/ETH)
 router.get('/popular-options/:currency', async (req, res) => {
     const { currency } = req.params;
-    const { type } = req.query; // Получаем тип сделки (simple или block)
+    const { type } = req.query;
 
-    // Определяем таблицы в зависимости от валюты
     let tradesTable;
     if (currency.toLowerCase() === 'btc') {
         tradesTable = type === 'block' ? 'btc_block_trades' : 'all_btc_trades';
@@ -18,7 +16,6 @@ router.get('/popular-options/:currency', async (req, res) => {
     }
 
     try {
-        // Получаем популярные опционы из выбранной таблицы (в зависимости от типа сделки)
         const result = await pool.query(`
             SELECT 
                 instrument_name, 

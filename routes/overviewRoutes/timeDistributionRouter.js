@@ -2,24 +2,40 @@ const express = require('express');
 const pool = require('../../config/database');
 const router = express.Router();
 
+const getTableName = (exchange, currency) => {
+    const exchangeTables = {
+        OKX: {
+            btc: 'okx_btc_trades',
+            eth: 'okx_eth_trades',
+        },
+        DER: {
+            btc: 'all_btc_trades',
+            eth: 'all_eth_trades',
+        },
+    };
+
+    const lowerCaseCurrency = currency.toLowerCase();
+    return exchangeTables[exchange]?.[lowerCaseCurrency] || null;
+};
 router.get('/time-distribution/:currency', async (req, res) => {
     const { currency } = req.params;
-    const { timeRange } = req.query; // Получаем параметр временного интервала из запроса
+    const { timeRange, exchange } = req.query;
 
-    let interval = '24 hours'; // По умолчанию - последние 24 часа
+    let interval = '24 hours';
 
-    // Определяем интервал времени на основе выбора пользователя
     if (timeRange === '7d') {
         interval = '7 days';
     } else if (timeRange === '30d') {
         interval = '30 days';
     }
 
-    // Определение таблицы в зависимости от валюты
-    const tableName = currency.toLowerCase() === 'btc' ? 'all_btc_trades' : 'all_eth_trades';
+    const tableName = getTableName(exchange, currency);
+
+    if (!tableName) {
+        return res.status(400).json({ message: 'Invalid exchange or currency specified' });
+    }
 
     try {
-        // Запрос данных за выбранный интервал времени с группировкой по timestamp
         const result = await pool.query(`
             SELECT
                 timestamp,
@@ -37,30 +53,25 @@ router.get('/time-distribution/:currency', async (req, res) => {
                 timestamp;
         `);
 
-        // Получаем текущий час
         const currentHour = new Date().getUTCHours();
 
-        // Инициализация массива на 24 часа, начиная с текущего часа
         const timeDistribution = Array.from({ length: 24 }, (_, i) => ({
-            hour: (currentHour - i + 24) % 24,  // Часы от текущего времени
+            hour: (currentHour - i + 24) % 24,
             calls: [],
             puts: []
         }));
 
-        // Обработка каждой сделки и группировка по часам
         result.rows.forEach(row => {
-            const tradeHour = new Date(row.timestamp).getUTCHours(); // Час сделки
+            const tradeHour = new Date(row.timestamp).getUTCHours();
             const tradeData = {
                 trade_count: row.trade_count,
                 avg_index_price: row.avg_index_price,
-                type: row.instrument_name.includes('-C') ? 'call' : 'put',  // Определение Call или Put
+                type: row.instrument_name.includes('-C') ? 'call' : 'put',
                 direction: row.direction,
             };
 
-            // Рассчитываем индекс для корректной группировки по часам
             const index = (currentHour - tradeHour + 24) % 24;
 
-            // Группировка по типу сделки (Call/Put)
             if (tradeData.type === 'call') {
                 timeDistribution[index].calls.push(tradeData);
             } else {

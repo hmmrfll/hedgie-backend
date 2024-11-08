@@ -1,39 +1,35 @@
 const express = require('express');
 const axios = require('axios');
 const { calculateMaxPain } = require('../services/maxPainLogic');
-const pool = require('../config/database'); // Подключение к базе данных
+const pool = require('../config/database');
 
 const router = express.Router();
 
-// Локальная переменная для хранения времени последнего обновления
 let lastUpdateTime = null;
 
 const extractExpiration = (instrumentName) => {
     const parts = instrumentName.split('-');
     if (parts.length >= 2) {
-        return parts[1]; // Дата экспирации — это вторая часть строки
+        return parts[1];
     } else {
         throw new Error(`Невозможно извлечь дату экспирации из ${instrumentName}`);
     }
 };
 
-// Проверка, прошло ли более 24 часов с момента последнего обновления
 const isDataStale = () => {
-    if (!lastUpdateTime) return true; // Если данных еще нет, то обновляем
+    if (!lastUpdateTime) return true;
 
     const now = new Date();
-    const hoursDifference = Math.abs(now - lastUpdateTime) / 36e5; // Разница в часах
+    const hoursDifference = Math.abs(now - lastUpdateTime) / 36e5;
 
-    return hoursDifference > 24; // Если прошло более 24 часов, данные устарели
+    return hoursDifference > 24;
 };
 
-// Роут для проверки и получения данных
 router.get('/max-pain-data', async (req, res) => {
     const { currency } = req.query;
 
     try {
 
-        // Выбор таблицы в зависимости от валюты
         let tableName;
         if (currency.toLowerCase() === 'btc') {
             tableName = 'max_pain_data_btc';
@@ -43,16 +39,13 @@ router.get('/max-pain-data', async (req, res) => {
             return res.status(400).json({ success: false, message: 'Неверная валюта' });
         }
 
-        // Проверяем, устарели ли данные
         if (!isDataStale()) {
-            // Если данные актуальны, возвращаем их
             const existingDataQuery = `SELECT expiration_date, max_pain, intrinsic_values FROM ${tableName}`;
             const result = await pool.query(existingDataQuery);
             const maxPainByExpiration = {};
             result.rows.forEach(row => {
                 maxPainByExpiration[row.expiration_date] = {
                     maxPain: row.max_pain,
-                    // Исправлено: проверяем тип intrinsic_values перед JSON.parse
                     intrinsicValues: typeof row.intrinsic_values === 'string'
                         ? JSON.parse(row.intrinsic_values)
                         : row.intrinsic_values
@@ -62,18 +55,16 @@ router.get('/max-pain-data', async (req, res) => {
             return res.json({ maxPainByExpiration });
         }
 
-        // Если данные устарели или отсутствуют, запрашиваем новые данные с Deribit
         const response = await axios.get(
             `https://deribit.com/api/v2/public/get_book_summary_by_currency?currency=${currency}&kind=option`
         );
 
-        // Группируем опционы по дате экспирации
         const optionsDataByExpiration = {};
         response.data.result.forEach(option => {
-            const expiration = extractExpiration(option.instrument_name); // Дата экспирации
+            const expiration = extractExpiration(option.instrument_name);
             const strikePrice = parseFloat(option.instrument_name.split('-')[2]);
             const openInterest = parseFloat(option.open_interest);
-            const optionType = option.instrument_name.split('-')[3]; // "C" для Call или "P" для Put
+            const optionType = option.instrument_name.split('-')[3];
 
             if (!optionsDataByExpiration[expiration]) {
                 optionsDataByExpiration[expiration] = [];
@@ -85,13 +76,11 @@ router.get('/max-pain-data', async (req, res) => {
             });
         });
 
-        // Рассчитываем Max Pain для каждой даты экспирации
         const maxPainByExpiration = {};
-        await pool.query(`DELETE FROM ${tableName}`); // Очищаем старые данные
+        await pool.query(`DELETE FROM ${tableName}`);
         for (const expiration in optionsDataByExpiration) {
             const { maxPain, intrinsicValues } = calculateMaxPain(optionsDataByExpiration[expiration]);
             maxPainByExpiration[expiration] = { maxPain, intrinsicValues };
-            // Сохраняем рассчитанные данные в базу данных
             const insertQuery = `
                 INSERT INTO ${tableName} (expiration_date, max_pain, intrinsic_values)
                 VALUES ($1, $2, $3)
@@ -103,7 +92,6 @@ router.get('/max-pain-data', async (req, res) => {
             ]);
         }
 
-        // Обновляем время последнего обновления
         lastUpdateTime = new Date();
         res.json({ maxPainByExpiration });
     } catch (error) {

@@ -2,11 +2,10 @@ const express = require('express');
 const pool = require('../config/database');
 const router = express.Router();
 
-// Функция для преобразования строкового формата DDMMMYY в формат YYYY-MM-DD
 const convertToISODate = (dateStr) => {
-    const year = `20${dateStr.slice(-2)}`; // Извлекаем последние две цифры года и добавляем "20" для полного года
-    const monthStr = dateStr.slice(-5, -2).toUpperCase(); // Извлекаем три символа месяца
-    let day = dateStr.slice(0, dateStr.length - 5); // Извлекаем оставшиеся символы как день
+    const year = `20${dateStr.slice(-2)}`;
+    const monthStr = dateStr.slice(-5, -2).toUpperCase();
+    let day = dateStr.slice(0, dateStr.length - 5);
 
     const monthMap = {
         JAN: '01', FEB: '02', MAR: '03', APR: '04', MAY: '05', JUN: '06',
@@ -16,16 +15,15 @@ const convertToISODate = (dateStr) => {
     const month = monthMap[monthStr];
     if (!month) {
         console.error(`Ошибка: не удалось найти месяц для строки: ${dateStr}`);
-        return null; // Возвращаем null, если месяц не найден
+        return null;
     }
 
-    // Добавляем ведущий ноль для дней, если день состоит из одной цифры
     if (day.length === 1) {
         day = `0${day}`;
     }
 
     const isoDate = `${year}-${month}-${day}`;
-    return isoDate; // Приводим к формату YYYY-MM-DD
+    return isoDate;
 };
 
 router.get('/expirations/:currency', async (req, res) => {
@@ -39,15 +37,13 @@ router.get('/expirations/:currency', async (req, res) => {
             WHERE timestamp >= NOW() - INTERVAL '24 hours'
         `);
 
-        // Извлекаем даты экспирации из instrument_name
         const expirations = result.rows
             .map(row => {
-                const match = row.instrument_name.match(/(\d{1,2}[A-Z]{3}\d{2})/); // Ищем даты в формате DDMMMYY
+                const match = row.instrument_name.match(/(\d{1,2}[A-Z]{3}\d{2})/);
                 return match ? match[1] : null;
             })
-            .filter(Boolean); // Убираем null значения
+            .filter(Boolean);
 
-        // Преобразуем даты в ISO-формат и сортируем их
         const sortedExpirations = [...new Set(expirations)]
             .map(date => ({
                 original: date,
@@ -55,7 +51,6 @@ router.get('/expirations/:currency', async (req, res) => {
             }))
             .sort((a, b) => new Date(a.isoDate) - new Date(b.isoDate));
 
-        // Возвращаем оригинальные даты после сортировки
         const finalExpirations = sortedExpirations.map(item => item.original);
 
         res.json(finalExpirations);

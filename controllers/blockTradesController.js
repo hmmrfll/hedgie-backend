@@ -1,9 +1,8 @@
 const pool = require('../config/database');
 
-// Получение метрик для BTC с учетом временного интервала
 exports.getBTCMetrics = async (req, res) => {
-    const { timeRange } = req.query; // Получаем параметр временного интервала из запроса
-    let interval = '24 hours'; // Значение по умолчанию - последние 24 часа
+    const { timeRange } = req.query;
+    let interval = '24 hours';
 
     // Меняем интервал в зависимости от выбранного значения
     if (timeRange === '7d') {
@@ -27,14 +26,12 @@ exports.getBTCMetrics = async (req, res) => {
 
         const metrics = result.rows[0];
 
-        // Преобразуем строки в числа и рассчитываем общую сумму всех метрик
         const callBuys = parseFloat(metrics.Call_Buys) || 0;
         const callSells = parseFloat(metrics.Call_Sells) || 0;
         const putBuys = parseFloat(metrics.Put_Buys) || 0;
         const putSells = parseFloat(metrics.Put_Sells) || 0;
         const total = callBuys + callSells + putBuys + putSells;
 
-        // Рассчитываем проценты для каждой метрики
         const response = {
             Call_Buys: callBuys,
             Call_Sells: callSells,
@@ -53,12 +50,10 @@ exports.getBTCMetrics = async (req, res) => {
     }
 };
 
-// Получение метрик для ETH с учетом временного интервала
 exports.getETHMetrics = async (req, res) => {
-    const { timeRange } = req.query; // Получаем параметр временного интервала из запроса
-    let interval = '24 hours'; // Значение по умолчанию - последние 24 часа
+    const { timeRange } = req.query;
+    let interval = '24 hours';
 
-    // Меняем интервал в зависимости от выбранного значения
     if (timeRange === '7d') {
         interval = '7 days';
     } else if (timeRange === '30d') {
@@ -80,14 +75,12 @@ exports.getETHMetrics = async (req, res) => {
 
         const metrics = result.rows[0];
 
-        // Преобразуем строки в числа и рассчитываем общую сумму всех метрик
         const callBuys = parseFloat(metrics.Call_Buys) || 0;
         const callSells = parseFloat(metrics.Call_Sells) || 0;
         const putBuys = parseFloat(metrics.Put_Buys) || 0;
         const putSells = parseFloat(metrics.Put_Sells) || 0;
         const total = callBuys + callSells + putBuys + putSells;
 
-        // Рассчитываем проценты для каждой метрики
         const response = {
             Call_Buys: callBuys,
             Call_Sells: callSells,

@@ -8,7 +8,6 @@ router.get('/trades', async (req, res) => {
     let tableName = asset === 'BTC' ? 'all_btc_trades' : 'all_eth_trades';
     const offset = (page - 1) * limit;
 
-    // Базовый запрос с форматированием времени
     let query = `
         SELECT 
             *, 
@@ -17,14 +16,12 @@ router.get('/trades', async (req, res) => {
         WHERE 1=1
     `;
 
-    // Запрос для подсчёта общего количества записей
     let countQuery = `
         SELECT COUNT(*) AS total
         FROM ${tableName}
         WHERE 1=1
     `;
 
-    // Применяем фильтры к обоим запросам
     if (tradeType && tradeType !== 'Buy/Sell') {
         query += ` AND direction = '${tradeType.toLowerCase()}'`;
         countQuery += ` AND direction = '${tradeType.toLowerCase()}'`;
@@ -41,7 +38,6 @@ router.get('/trades', async (req, res) => {
         countQuery += ` AND instrument_name LIKE '%${expiration}%'`;
     }
 
-    // Фильтр по размеру (Size Order)
     if (sizeOrder && sizeOrder !== 'All Sizes') {
         if (sizeOrder === 'higher to lower') {
             query += ` ORDER BY amount DESC`;
@@ -54,7 +50,6 @@ router.get('/trades', async (req, res) => {
         }
     }
 
-    // Фильтр по премии (Premium Order)
     if (premiumOrder && premiumOrder !== 'All Premiums') {
         if (sizeOrder === 'All Sizes') {
             if (premiumOrder === 'higher to lower') {
@@ -83,14 +78,12 @@ router.get('/trades', async (req, res) => {
         }
     }
 
-    // Пагинация
     query += ` LIMIT ${Number(limit)} OFFSET ${Number(offset)}`;
 
     try {
         const result = await pool.query(query);
         const trades = result.rows;
 
-        // Получаем общее количество записей
         const countResult = await pool.query(countQuery);
         const totalRows = parseInt(countResult.rows[0].total, 10);
         const totalPages = Math.ceil(totalRows / limit);

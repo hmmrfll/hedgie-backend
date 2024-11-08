@@ -4,11 +4,10 @@ const router = express.Router();
 
 router.get('/strike-activity/:currency', async (req, res) => {
     const { currency } = req.params;
-    const { expiration, timeRange } = req.query; // Получаем дату экспирации и временной интервал
+    const { expiration, timeRange } = req.query;
 
-    let interval = '24 hours'; // По умолчанию - последние 24 часа
+    let interval = '24 hours';
 
-    // Определяем интервал времени на основе выбора пользователя
     if (timeRange === '7d') {
         interval = '7 days';
     } else if (timeRange === '30d') {
@@ -28,7 +27,6 @@ router.get('/strike-activity/:currency', async (req, res) => {
                 timestamp >= NOW() - INTERVAL '${interval}'
         `;
 
-        // Фильтрация по дате экспирации, если она выбрана
         if (expiration && expiration !== 'All Expirations') {
             query += ` AND instrument_name LIKE '%${expiration.replace(/\s+/g, '').toUpperCase()}%'`;
         }
@@ -43,9 +41,8 @@ router.get('/strike-activity/:currency', async (req, res) => {
 
         const result = await pool.query(query);
 
-        // Извлекаем strike price и option type из instrument_name
         const dataWithStrike = result.rows.map(row => {
-            const match = row.instrument_name.match(/(\d+)-([CP])$/); // Извлекаем цифры и тип опциона (C/P)
+            const match = row.instrument_name.match(/(\d+)-([CP])$/);
             const strike_price = match ? match[1] : null;
             const option_type = match ? match[2] : null;
             return {

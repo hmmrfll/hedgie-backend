@@ -2,24 +2,40 @@ const express = require('express');
 const pool = require('../../config/database');
 const router = express.Router();
 
-// Route to get popular options for a specific currency (BTC/ETH)
+const getTableName = (exchange, currency) => {
+    const exchangeTables = {
+        OKX: {
+            btc: 'okx_btc_trades',
+            eth: 'okx_eth_trades',
+        },
+        DER: {
+            btc: 'all_btc_trades',
+            eth: 'all_eth_trades',
+        },
+    };
+
+    const lowerCaseCurrency = currency.toLowerCase();
+    return exchangeTables[exchange]?.[lowerCaseCurrency] || null;
+};
+
 router.get('/popular-options/:currency', async (req, res) => {
     const { currency } = req.params;
-    const { timeRange } = req.query; // Получаем параметр временного интервала из запроса
-    let interval = '24 hours'; // По умолчанию берем последние 24 часа
+    const { timeRange, exchange } = req.query;
 
-    // Определяем временной интервал на основе параметра
+    let interval = '24 hours';
     if (timeRange === '7d') {
         interval = '7 days';
     } else if (timeRange === '30d') {
         interval = '30 days';
     }
 
-    // Определяем нужную таблицу на основе валюты (BTC или ETH)
-    const tableName = currency.toLowerCase() === 'btc' ? 'all_btc_trades' : 'all_eth_trades';
+    const tableName = getTableName(exchange, currency);
+
+    if (!tableName) {
+        return res.status(400).json({ message: 'Invalid exchange or currency specified' });
+    }
 
     try {
-        // Запрос для получения популярных опционов на основе их названия и количества сделок
         const result = await pool.query(`
             SELECT 
                 instrument_name, 

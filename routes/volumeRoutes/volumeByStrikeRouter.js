@@ -3,19 +3,31 @@ const pool = require('../../config/database');
 const axios = require('axios');
 const router = express.Router();
 
-let cache = {}; // Простой объект для кэширования данных
-const CACHE_EXPIRY = 300000; // Время жизни кэша: 5 минут (300000 миллисекунд)
+let cache = {};
+const CACHE_EXPIRY = 300000;
 
-// Функция для получения курса конверсии валюты
+const getTableName = (exchange, asset) => {
+    const exchangeTables = {
+        OKX: {
+            btc: 'okx_btc_trades',
+            eth: 'okx_eth_trades',
+        },
+        DER: {
+            btc: 'all_btc_trades',
+            eth: 'all_eth_trades',
+        },
+    };
+
+    return exchangeTables[exchange]?.[asset.toLowerCase()] || null;
+};
+
 async function getConversionRate(asset) {
     const cacheKey = `conversionRate_${asset}`;
 
-    // Проверяем наличие курса в кэше
     if (cache[cacheKey] && (Date.now() - cache[cacheKey].timestamp < CACHE_EXPIRY)) {
-        return cache[cacheKey].rate; // Возвращаем курс из кэша, если не истек срок
+        return cache[cacheKey].rate;
     }
 
-    // Выполняем запрос к API для получения курса
     const url = asset.toLowerCase() === 'btc'
         ? 'https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd'
         : 'https://api.coingecko.com/api/v3/simple/price?ids=ethereum&vs_currencies=usd';
@@ -25,7 +37,6 @@ async function getConversionRate(asset) {
         ? response.data.bitcoin.usd
         : response.data.ethereum.usd;
 
-    // Сохраняем результат в кэш
     cache[cacheKey] = {
         rate,
         timestamp: Date.now(),
@@ -36,28 +47,35 @@ async function getConversionRate(asset) {
 
 router.get('/open-interest-by-strike/:asset/:expiration', async (req, res) => {
     const { asset, expiration } = req.params;
+    const { exchange } = req.query;
 
-    const cacheKey = `openInterest_${asset}_${expiration}`;
+    // Include exchange in cache key
+    const cacheKey = `openInterest_${asset}_${expiration}_${exchange}`;
     try {
-        // Проверяем кэш для данных открытого интереса
         if (cache[cacheKey] && (Date.now() - cache[cacheKey].timestamp < CACHE_EXPIRY)) {
-            return res.json(cache[cacheKey].data); // Возвращаем кэшированные данные
+            return res.json(cache[cacheKey].data);
         }
 
-        // Получаем курс валюты для конвертации
         const conversionRate = await getConversionRate(asset);
 
-        // Условие для фильтрации по дате экспирации
+        const tableName = getTableName(exchange, asset);
+        if (!tableName) {
+            console.error('Invalid exchange or asset specified');
+            return res.status(400).json({ message: 'Invalid exchange or asset specified' });
+        }
+
+        // Choose field based on the exchange
+        const contractField = exchange === 'OKX' ? 'amount' : 'contracts';
         const expirationCondition = expiration === 'all' ? '' : `AND instrument_name LIKE '%${expiration}%'`;
 
         const query = `
             SELECT 
                 CAST(SUBSTRING(instrument_name FROM '-([0-9]+)-[PC]$') AS INTEGER) AS strike,
-                SUM(CASE WHEN instrument_name LIKE '%P' THEN contracts ELSE 0 END) AS puts,
-                SUM(CASE WHEN instrument_name LIKE '%C' THEN contracts ELSE 0 END) AS calls,
-                SUM(CASE WHEN instrument_name LIKE '%P' THEN contracts * mark_price ELSE 0 END) AS puts_market_value,
-                SUM(CASE WHEN instrument_name LIKE '%C' THEN contracts * mark_price ELSE 0 END) AS calls_market_value
-            FROM ${asset.toLowerCase() === 'btc' ? 'all_btc_trades' : 'all_eth_trades'}
+                SUM(CASE WHEN instrument_name LIKE '%P' THEN ${contractField} ELSE 0 END) AS puts,
+                SUM(CASE WHEN instrument_name LIKE '%C' THEN ${contractField} ELSE 0 END) AS calls,
+                SUM(CASE WHEN instrument_name LIKE '%P' THEN ${contractField} * mark_price ELSE 0 END) AS puts_market_value,
+                SUM(CASE WHEN instrument_name LIKE '%C' THEN ${contractField} * mark_price ELSE 0 END) AS calls_market_value
+            FROM ${tableName}
             WHERE timestamp >= NOW() - INTERVAL '24 hours'
             ${expirationCondition}
             GROUP BY strike
@@ -66,7 +84,6 @@ router.get('/open-interest-by-strike/:asset/:expiration', async (req, res) => {
 
         const result = await pool.query(query);
 
-        // Преобразование рыночных значений в доллары США
         const data = result.rows.map(row => ({
             strike: row.strike,
             puts: row.puts,
@@ -75,7 +92,6 @@ router.get('/open-interest-by-strike/:asset/:expiration', async (req, res) => {
             calls_market_value: (row.calls_market_value * conversionRate).toFixed(2),
         }));
 
-        // Сохраняем данные в кэш
         cache[cacheKey] = {
             data,
             timestamp: Date.now(),

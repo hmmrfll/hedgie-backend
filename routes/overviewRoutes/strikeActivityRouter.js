@@ -2,20 +2,38 @@ const express = require('express');
 const pool = require('../../config/database');
 const router = express.Router();
 
+const getTableName = (exchange, currency) => {
+    const exchangeTables = {
+        OKX: {
+            btc: 'okx_btc_trades',
+            eth: 'okx_eth_trades',
+        },
+        DER: {
+            btc: 'all_btc_trades',
+            eth: 'all_eth_trades',
+        },
+    };
+
+    const lowerCaseCurrency = currency.toLowerCase();
+    return exchangeTables[exchange]?.[lowerCaseCurrency] || null;
+};
 router.get('/strike-activity/:currency', async (req, res) => {
     const { currency } = req.params;
-    const { expiration, timeRange } = req.query; // Получаем параметры временного интервала и экспирации
+    const { expiration, timeRange, exchange } = req.query;
 
-    let interval = '24 hours'; // По умолчанию - последние 24 часа
+    let interval = '24 hours';
 
-    // Определяем интервал на основе выбранного времени
     if (timeRange === '7d') {
         interval = '7 days';
     } else if (timeRange === '30d') {
         interval = '30 days';
     }
 
-    const tableName = currency.toLowerCase() === 'btc' ? 'all_btc_trades' : 'all_eth_trades';
+    const tableName = getTableName(exchange, currency);
+
+    if (!tableName) {
+        return res.status(400).json({ message: 'Invalid exchange or currency specified' });
+    }
 
     try {
         let query = `
@@ -28,7 +46,6 @@ router.get('/strike-activity/:currency', async (req, res) => {
                 timestamp >= NOW() - INTERVAL '${interval}'
         `;
 
-        // Фильтрация по дате экспирации, если она выбрана
         if (expiration && expiration !== 'All Expirations') {
             query += ` AND instrument_name LIKE '%${expiration.replace(/\s+/g, '').toUpperCase()}%'`;
         }
@@ -42,18 +59,16 @@ router.get('/strike-activity/:currency', async (req, res) => {
 
         const result = await pool.query(query);
 
-        // Создаем объект для агрегации данных по страйкам и типам опционов
         const aggregatedData = {};
 
         result.rows.forEach(row => {
-            const match = row.instrument_name.match(/(\d+)-([CP])$/); // Извлекаем страйк и тип опциона (C/P)
+            const match = row.instrument_name.match(/(\d+)-([CP])$/);
             const strike_price = match ? parseInt(match[1], 10) : null;
             const option_type = match ? match[2] : null;
 
             if (strike_price && option_type) {
                 const key = `${strike_price}-${option_type}`;
 
-                // Если страйк уже существует, добавляем к существующему количеству сделок
                 if (aggregatedData[key]) {
                     aggregatedData[key].trade_count += parseInt(row.trade_count, 10);
                 } else {
@@ -66,7 +81,6 @@ router.get('/strike-activity/:currency', async (req, res) => {
             }
         });
 
-        // Преобразуем объект в массив для отправки на фронт
         const dataWithStrike = Object.values(aggregatedData);
 
         res.json(dataWithStrike);

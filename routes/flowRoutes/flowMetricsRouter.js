@@ -10,7 +10,6 @@ let lastUpdated = {
     ETH: null,
 };
 
-// Функция для получения метрик
 async function fetchMetrics(asset) {
     const tableName = asset === 'BTC' ? 'all_btc_trades' : 'all_eth_trades';
 
@@ -36,9 +35,8 @@ async function fetchMetrics(asset) {
     };
 }
 
-// Роутер для получения метрик с учетом актива и кэшированием
 router.get('/metrics', async (req, res) => {
-    const { asset } = req.query; // Получаем актив с фронта (BTC или ETH)
+    const { asset } = req.query;
 
     if (!asset || !['BTC', 'ETH'].includes(asset)) {
         return res.status(400).json({ message: 'Invalid or missing asset. Must be BTC or ETH.' });
@@ -46,7 +44,6 @@ router.get('/metrics', async (req, res) => {
 
     const currentTime = Date.now();
 
-    // Проверяем, прошло ли больше часа с последнего обновления кэша для конкретного актива
     if (!cachedMetrics[asset] || currentTime - lastUpdated[asset] > 60 * 60 * 1000) {
         try {
             cachedMetrics[asset] = await fetchMetrics(asset);

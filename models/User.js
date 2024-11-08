@@ -1,6 +1,5 @@
-// models/User.js
 const { DataTypes } = require('sequelize');
-const sequelize = require('../config/database'); // Импортируем подключение к базе данных
+const sequelize = require('../config/database');
 
 const User = sequelize.define('User', {
     email: {
@@ -18,8 +17,8 @@ const User = sequelize.define('User', {
         allowNull: false
     }
 }, {
-    tableName: 'users', // Название таблицы в базе данных
-    timestamps: false // Не добавляем временные метки (createdAt, updatedAt)
+    tableName: 'users',
+    timestamps: false
 });
 
 module.exports = User;

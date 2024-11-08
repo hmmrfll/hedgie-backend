@@ -1,16 +1,18 @@
 const pool = require('../config/database');
 
-// Получение метрик для BTC с учетом временного интервала
 exports.getBTCMetrics = async (req, res) => {
-    const { timeRange } = req.query; // Получаем параметр временного интервала из запроса
-    let interval = '24 hours'; // Значение по умолчанию - последние 24 часа
+    const { timeRange, exchange } = req.query;
+    let interval = '24 hours';
 
-    // Меняем интервал в зависимости от выбранного значения
+    // Установка интервала времени в зависимости от параметра timeRange
     if (timeRange === '7d') {
         interval = '7 days';
     } else if (timeRange === '30d') {
         interval = '30 days';
     }
+
+    // Выбор таблицы в зависимости от биржи
+    const tableName = exchange === 'OKX' ? 'okx_btc_trades' : 'all_btc_trades';
 
     try {
         const result = await pool.query(`
@@ -20,21 +22,19 @@ exports.getBTCMetrics = async (req, res) => {
                 SUM(CASE WHEN instrument_name LIKE '%-P' AND direction = 'buy' THEN amount ELSE 0 END) AS "Put_Buys",
                 SUM(CASE WHEN instrument_name LIKE '%-P' AND direction = 'sell' THEN amount ELSE 0 END) AS "Put_Sells"
             FROM 
-                all_btc_trades
+                ${tableName}
             WHERE 
                 timestamp >= NOW() - INTERVAL '${interval}';
         `);
 
         const metrics = result.rows[0];
 
-        // Преобразуем строки в числа и рассчитываем общую сумму всех метрик
         const callBuys = parseFloat(metrics.Call_Buys) || 0;
         const callSells = parseFloat(metrics.Call_Sells) || 0;
         const putBuys = parseFloat(metrics.Put_Buys) || 0;
         const putSells = parseFloat(metrics.Put_Sells) || 0;
         const total = callBuys + callSells + putBuys + putSells;
 
-        // Рассчитываем проценты для каждой метрики
         const response = {
             Call_Buys: callBuys,
             Call_Sells: callSells,
@@ -53,17 +53,18 @@ exports.getBTCMetrics = async (req, res) => {
     }
 };
 
-// Получение метрик для ETH с учетом временного интервала
 exports.getETHMetrics = async (req, res) => {
-    const { timeRange } = req.query; // Получаем параметр временного интервала из запроса
-    let interval = '24 hours'; // Значение по умолчанию - последние 24 часа
+    const { timeRange, exchange } = req.query;
+    let interval = '24 hours';
 
-    // Меняем интервал в зависимости от выбранного значения
     if (timeRange === '7d') {
         interval = '7 days';
     } else if (timeRange === '30d') {
         interval = '30 days';
     }
+
+    // Выбор таблицы в зависимости от биржи
+    const tableName = exchange === 'OKX' ? 'okx_eth_trades' : 'all_eth_trades';
 
     try {
         const result = await pool.query(`
@@ -73,21 +74,19 @@ exports.getETHMetrics = async (req, res) => {
                 SUM(CASE WHEN instrument_name LIKE '%-P' AND direction = 'buy' THEN amount ELSE 0 END) AS "Put_Buys",
                 SUM(CASE WHEN instrument_name LIKE '%-P' AND direction = 'sell' THEN amount ELSE 0 END) AS "Put_Sells"
             FROM 
-                all_eth_trades
+                ${tableName}
             WHERE 
                 timestamp >= NOW() - INTERVAL '${interval}';
         `);
 
         const metrics = result.rows[0];
 
-        // Преобразуем строки в числа и рассчитываем общую сумму всех метрик
         const callBuys = parseFloat(metrics.Call_Buys) || 0;
         const callSells = parseFloat(metrics.Call_Sells) || 0;
         const putBuys = parseFloat(metrics.Put_Buys) || 0;
         const putSells = parseFloat(metrics.Put_Sells) || 0;
         const total = callBuys + callSells + putBuys + putSells;
 
-        // Рассчитываем проценты для каждой метрики
         const response = {
             Call_Buys: callBuys,
             Call_Sells: callSells,

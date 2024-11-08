@@ -2,7 +2,6 @@ const express = require('express');
 const pool = require('../../config/database');
 const router = express.Router();
 
-// Роутер для получения последних 25 сделок
 router.get('/recent-trades', async (req, res) => {
     const { asset, tradeType, optionType, expiration } = req.query;
 

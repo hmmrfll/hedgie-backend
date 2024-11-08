@@ -13,15 +13,13 @@ router.get('/strikes/:currency', async (req, res) => {
             WHERE timestamp >= NOW() - INTERVAL '24 hours'
         `);
 
-        // Extract strikes from instrument_name
         const strikes = result.rows
             .map(row => {
-                const match = row.instrument_name.match(/(\d+)-[CP]$/); // Match digits before -C or -P
-                return match ? parseInt(match[1], 10) : null; // Convert to number
+                const match = row.instrument_name.match(/(\d+)-[CP]$/);
+                return match ? parseInt(match[1], 10) : null;
             })
-            .filter(Boolean); // Remove null values
+            .filter(Boolean);
 
-        // Remove duplicates and sort strikes in ascending order
         const uniqueSortedStrikes = [...new Set(strikes)].sort((a, b) => a - b);
 
         res.json(uniqueSortedStrikes);

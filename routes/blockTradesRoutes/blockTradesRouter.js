@@ -4,7 +4,6 @@ const { getBlockTrades } = require('../../controllers/blockTradesController');
 const { getBTCMetrics, getETHMetrics } = require('../../controllers/blockTradesController');
 
 
-// Маршрут для получения BTC блок-трейдов
 router.get('/btc', getBTCMetrics);
 router.get('/eth', getETHMetrics);
 

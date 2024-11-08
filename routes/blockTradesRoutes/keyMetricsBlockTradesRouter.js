@@ -4,11 +4,10 @@ const router = express.Router();
 
 router.get('/key-metrics/:currency', async (req, res) => {
     const { currency } = req.params;
-    const { timeRange } = req.query; // Получаем временной интервал из запроса
+    const { timeRange } = req.query;
 
-    let interval = '24 hours'; // По умолчанию - последние 24 часа
+    let interval = '24 hours';
 
-    // Определяем интервал времени на основе выбора пользователя
     if (timeRange === '7d') {
         interval = '7 days';
     } else if (timeRange === '30d') {
@@ -18,7 +17,6 @@ router.get('/key-metrics/:currency', async (req, res) => {
     const tableName = currency.toLowerCase() === 'btc' ? 'btc_block_trades' : 'eth_block_trades';
 
     try {
-        // Запрос для получения всех данных по сделкам за выбранный интервал времени
         const tradesResult = await pool.query(`
             SELECT 
                 amount, 
@@ -29,7 +27,6 @@ router.get('/key-metrics/:currency', async (req, res) => {
                 timestamp >= NOW() - INTERVAL '${interval}'
         `);
 
-        // Рассчитываем общий объем (total nominal volume)
         let totalVolume = 0;
         tradesResult.rows.forEach(trade => {
             const amount = trade.amount || 0;
@@ -38,7 +35,6 @@ router.get('/key-metrics/:currency', async (req, res) => {
             totalVolume += volume;
         });
 
-        // Запрос для расчета средней цены, общего объема и других метрик
         const result = await pool.query(`
             SELECT 
                 SUM(COALESCE(price * amount * index_price, 0)) / COUNT(*) AS avg_price, -- Средняя цена сделки с учетом объема
@@ -54,10 +50,10 @@ router.get('/key-metrics/:currency', async (req, res) => {
         const data = result.rows[0];
 
         res.json({
-            avg_price: data.avg_price || 0, // Средняя цена сделки (в USD)
-            total_nominal_volume: totalVolume || 0, // Общий объём (в USD)
-            total_premium: data.total_premium || 0, // Общая премия (в USD)
-            liquidation_count: data.liquidation_count || 0 // Количество ликвидаций
+            avg_price: data.avg_price || 0,
+            total_nominal_volume: totalVolume || 0,
+            total_premium: data.total_premium || 0,
+            liquidation_count: data.liquidation_count || 0
         });
     } catch (error) {
         res.status(500).json({ message: 'Failed to fetch key metrics', error });
