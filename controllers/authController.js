@@ -9,8 +9,6 @@ exports.register = async (req, res) => {
     try {
         const { email, username, password } = req.body;
 
-        console.log('Received registration request:', { email, username, password });
-
         const existingUser = await pool.query('SELECT * FROM users WHERE email = $1', [email]);
         if (existingUser.rows.length > 0) {
             console.warn('User already exists:', email);
@@ -21,7 +19,6 @@ exports.register = async (req, res) => {
 
         await pool.query('INSERT INTO users (email, username, password_hash) VALUES ($1, $2, $3)', [email, username, hashedPassword]);
 
-        console.log('User saved successfully');
         res.json({ success: true });
     } catch (error) {
         console.error('Error saving user:', error);
@@ -33,7 +30,6 @@ exports.login = async (req, res) => {
     const { email, password } = req.body;
 
     try {
-        console.log(`Received login request: ${email}`);
 
         const result = await pool.query('SELECT * FROM users WHERE email = $1', [email]);
 

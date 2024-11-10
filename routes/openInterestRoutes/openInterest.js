@@ -40,8 +40,6 @@ router.get('/:asset/:expiration', async (req, res) => {
 
         query += ` GROUP BY instrument_name`;
 
-        console.log('Executing query:', query);
-
         const result = await pool.query(query);
 
         if (result.rows.length === 0) {
@@ -58,7 +56,6 @@ router.get('/:asset/:expiration', async (req, res) => {
             }
         });
 
-        console.log('Fetched data:', data);
         res.json(data);
     } catch (error) {
         console.error('Failed to fetch open interest data:', error.message);

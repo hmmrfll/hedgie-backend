@@ -48,7 +48,7 @@ router.get('/key-metrics/:currency', async (req, res) => {
         const hasLiquidationColumn = await columnExists(tableName, 'liquidation');
 
         const tradesResult = await pool.query(`
-            SELECT amount, index_price
+            SELECT amount, index_price, price
             FROM ${tableName}
             WHERE timestamp >= NOW() - INTERVAL '${interval}'
         `);
@@ -57,7 +57,9 @@ router.get('/key-metrics/:currency', async (req, res) => {
         tradesResult.rows.forEach(trade => {
             const amount = trade.amount || 0;
             const indexPrice = trade.index_price || 0;
-            totalVolume += amount * indexPrice;
+            const tradeVolume = amount * indexPrice;
+            totalVolume += tradeVolume;
+
         });
 
         const liquidationCountQuery = hasLiquidationColumn ? 'COUNT(CASE WHEN liquidation IS NOT NULL THEN 1 END) AS liquidation_count' : '0 AS liquidation_count';
@@ -75,6 +77,7 @@ router.get('/key-metrics/:currency', async (req, res) => {
         `);
 
         const data = result.rows[0];
+
         res.json({
             avg_price: data.avg_price || 0,
             total_nominal_volume: totalVolume || 0,
