@@ -1,23 +1,23 @@
 const express = require('express');
-const pool = require('../../config/database'); // Database connection
-const moment = require('moment'); // For date manipulation
+const pool = require('../../config/database');
+const moment = require('moment');
 const router = express.Router();
 
 const calculateDTE = (instrumentName) => {
-    const expDate = instrumentName.split('-')[1]; // Format: 6SEP24
-    const expDateFormatted = moment(expDate, 'DDMMMYY'); // Convert to date
+    const expDate = instrumentName.split('-')[1];
+    const expDateFormatted = moment(expDate, 'DDMMMYY');
     const now = moment();
-    const dte = expDateFormatted.diff(now, 'days'); // Difference in days
-    return dte >= 0 ? `${dte}d` : '0d'; // Return in format Xd
+    const dte = expDateFormatted.diff(now, 'days');
+    return dte >= 0 ? `${dte}d` : '0d';
 };
 
 const determineMaker = (premium) => {
-    if (premium < 250) return '🐙🦑';  // SHRIMP
-    if (premium < 1000) return '🐟🎣';  // FISH
-    if (premium < 10000) return '🐡🚣'; // CARP
-    if (premium < 100000) return '🐬🌊'; // DOLPHIN
-    if (premium < 1000000) return '🐋🐳'; // WHALE
-    if (premium < 10000000) return '🦈'; // WHALE
+    if (premium < 250) return '🐙🦑';
+    if (premium < 1000) return '🐟🎣';
+    if (premium < 10000) return '🐡🚣';
+    if (premium < 100000) return '🐬🌊';
+    if (premium < 1000000) return '🐋🐳';
+    if (premium < 10000000) return '🦈';
     return 'Unknown';
 };
 
@@ -47,9 +47,6 @@ router.get('/trades', async (req, res) => {
     const offset = (parsedPage - 1) * parsedPageSize;
 
     try {
-        console.log('Received query parameters:', req.query);
-
-        // Start building the SQL query
         let query = `
             SELECT 
                 TO_CHAR(timestamp, 'HH24:MI:SS') AS timeUtc,
@@ -68,7 +65,6 @@ router.get('/trades', async (req, res) => {
             WHERE 1=1
         `;
 
-        // Add filters to the query
         if (optionType !== 'ALL') {
             query += ` AND RIGHT(instrument_name, 1) = '${optionType}'`;
         }
@@ -91,20 +87,17 @@ router.get('/trades', async (req, res) => {
             query += ` AND (TO_DATE(SUBSTRING(instrument_name FROM '\\d+[A-Z]{3}\\d{2}'), 'DDMONYY') - CURRENT_DATE) <= ${dteMax}`;
         }
         if (side !== 'ALL') {
-            query += ` AND direction = '${side.toLowerCase()}'`; // direction хранит BUY или SELL
+            query += ` AND direction = '${side.toLowerCase()}'`;
         }
 
-        console.log('Query with filters:', query);
+        query += ` ORDER BY timestamp DESC`;
 
-        // Fetch all filtered trades
         const tradesResult = await pool.query(query);
 
-        // Map the trades and calculate the maker
         let trades = tradesResult.rows.map((trade) => {
             const strike = trade.instrument_name.match(/\d+(?=-[CP]$)/);
             const dte = calculateDTE(trade.instrument_name);
 
-            // Convert price and premium to dollar equivalents
             const priceInUSD = (parseFloat(trade.price) * parseFloat(trade.spot)).toFixed(2); // price * index_price
             const premiumInUSD = (parseFloat(trade.price) * parseFloat(trade.size) * parseFloat(trade.spot)).toFixed(2); // price * size * index_price
 
@@ -114,20 +107,18 @@ router.get('/trades', async (req, res) => {
                 ...trade,
                 strike: strike ? strike[0] : null,
                 dte,
-                price: priceInUSD, // Updated price
-                premium: premiumInUSD, // Updated premium
+                price: priceInUSD,
+                premium: premiumInUSD,
                 maker: makerCalculated,
             };
         });
 
         console.log('Trades after processing:', trades);
 
-        // Filter by maker if needed
         if (maker && maker !== 'ALL') {
             trades = trades.filter((trade) => trade.maker === maker);
         }
 
-        // Paginate the results
         const totalRows = trades.length;
         const totalPages = Math.ceil(totalRows / parsedPageSize);
         const paginatedTrades = trades.slice(offset, offset + parsedPageSize);
