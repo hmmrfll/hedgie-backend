@@ -48,22 +48,23 @@ router.get('/trades', async (req, res) => {
 
     try {
         let query = `
-            SELECT 
-                TO_CHAR(timestamp, 'HH24:MI:SS') AS timeUtc,
-                direction AS side,
-                instrument_name,
-                RIGHT(instrument_name, 1) AS k,
-                TO_CHAR(timestamp, 'YYYY-MM-DD') AS chain,
-                index_price AS spot,
-                amount AS size,
-                price,
-                iv,
-                TO_DATE(SUBSTRING(instrument_name FROM '\\d+[A-Z]{3}\\d{2}'), 'DDMONYY') AS expiration_date,
-                'Deribit' AS exchange
-            FROM 
-                ${asset === 'ALL' ? '(SELECT * FROM eth_block_trades UNION SELECT * FROM btc_block_trades)' : asset.toLowerCase() + '_block_trades'}
-            WHERE 1=1
-        `;
+    SELECT 
+        TO_CHAR(timestamp, 'HH24:MI:SS') AS timeUtc,
+        direction AS side,
+        instrument_name,
+        RIGHT(instrument_name, 1) AS k,
+        TO_CHAR(timestamp, 'YYYY-MM-DD') AS chain,
+        index_price AS spot,
+        amount AS size,
+        price,
+        iv,
+        TO_DATE(SUBSTRING(instrument_name FROM '\\d+[A-Z]{3}\\d{2}'), 'DDMONYY') AS expiration_date,
+        'Deribit' AS exchange
+    FROM 
+        ${asset === 'ALL' ? '(SELECT * FROM eth_block_trades UNION SELECT * FROM btc_block_trades) AS combined_trades' : asset.toLowerCase() + '_block_trades'}
+    WHERE 1=1
+`;
+
 
         if (optionType !== 'ALL') {
             query += ` AND RIGHT(instrument_name, 1) = '${optionType}'`;
