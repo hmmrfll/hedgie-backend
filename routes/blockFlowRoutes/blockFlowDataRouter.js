@@ -114,7 +114,6 @@ router.get('/trades', async (req, res) => {
             };
         });
 
-        console.log('Trades after processing:', trades);
 
         if (maker && maker !== 'ALL') {
             trades = trades.filter((trade) => trade.maker === maker);
@@ -123,8 +122,6 @@ router.get('/trades', async (req, res) => {
         const totalRows = trades.length;
         const totalPages = Math.ceil(totalRows / parsedPageSize);
         const paginatedTrades = trades.slice(offset, offset + parsedPageSize);
-
-        console.log(`Returning page ${parsedPage} of ${totalPages} with ${paginatedTrades.length} trades`);
 
         res.json({
             trades: paginatedTrades,
