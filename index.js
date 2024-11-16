@@ -34,7 +34,7 @@ const flowDataRouter = require('./routes/flowRoutes/flowDataRouter');
 const volumePopularOptionsRouter = require('./routes/volumeRoutes/volumePopularOptionsRouter');
 const popularOptionByVolumeRouter = require('./routes/overviewRoutes/popularOptionByVolumeRouter');
 const popularOptionByVolumeBlockTradesRouter = require('./routes/blockTradesRoutes/popularOptionByVolumeBlockTradesRouter');
-
+const blockFlowDataRouter = require('./routes/blockFlowRoutes/blockFlowDataRouter');
 
 const app = express();
 
@@ -57,6 +57,7 @@ app.use('/api/volume', volumeInterestRouter, volumeByExpirationRouter, volumeByS
 app.use('/api/datalab', dataDownload);
 
 app.use('/api/flow', flowMetricsRouter, lastDataRouter);
+app.use('/api/block/flow', blockFlowDataRouter);
 
 
 
