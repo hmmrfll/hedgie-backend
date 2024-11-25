@@ -101,12 +101,13 @@ router.get('/trades', async (req, res) => {
         }
 
         const metricsQuery = `
-            SELECT
-                SUM(CASE WHEN instrument_name LIKE '%-C' THEN amount ELSE 0 END) AS total_calls,
-                SUM(CASE WHEN instrument_name LIKE '%-P' THEN amount ELSE 0 END) AS total_puts
-            FROM ${tableName}
-            WHERE 1=1
-        `;
+    SELECT
+        SUM(CASE WHEN instrument_name LIKE '%-C' THEN amount ELSE 0 END) AS total_calls,
+        SUM(CASE WHEN instrument_name LIKE '%-P' THEN amount ELSE 0 END) AS total_puts
+    FROM ${tableName}
+    WHERE timestamp >= NOW() - INTERVAL '24 HOURS'
+`;
+
 
         const metricsResult = await pool.query(metricsQuery);
         const { total_calls, total_puts } = metricsResult.rows[0];
