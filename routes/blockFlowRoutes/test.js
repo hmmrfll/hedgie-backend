@@ -25,21 +25,16 @@ router.get('/trades', async (req, res) => {
     const {
         asset = 'ALL',
         side = 'ALL',
-        tradeType,
         optionType = 'ALL',
-        expiration,
-        sizeOrder,
-        premiumOrder,
-        page = 1,
-        pageSize = 15,
-        exchange,
         minStrike,
         maxStrike,
-        maker,
         ivMin,
         ivMax,
         dteMin,
         dteMax,
+        maker,
+        page = 1,
+        pageSize = 15,
     } = req.query;
 
     const parsedPageSize = parseInt(pageSize, 10) || 15;
@@ -48,23 +43,23 @@ router.get('/trades', async (req, res) => {
 
     try {
         let query = `
-    SELECT 
-        TO_CHAR(timestamp, 'HH24:MI:SS') AS timeUtc,
-        direction AS side,
-        instrument_name,
-        RIGHT(instrument_name, 1) AS k,
-        TO_CHAR(timestamp, 'YYYY-MM-DD') AS chain,
-        index_price AS spot,
-        amount AS size,
-        price,
-        iv,
-        TO_DATE(SUBSTRING(instrument_name FROM '\\d+[A-Z]{3}\\d{2}'), 'DDMONYY') AS expiration_date,
-        'Deribit' AS exchange
-    FROM 
-        ${asset === 'ALL' ? '(SELECT * FROM eth_block_trades UNION SELECT * FROM btc_block_trades) AS combined_trades' : asset.toLowerCase() + '_block_trades'}
-    WHERE 1=1
-`;
-
+            SELECT 
+                block_trade_id,
+                TO_CHAR(timestamp, 'HH24:MI:SS') AS timeUtc,
+                direction AS side,
+                instrument_name,
+                RIGHT(instrument_name, 1) AS k,
+                TO_CHAR(timestamp, 'YYYY-MM-DD') AS chain,
+                index_price AS spot,
+                amount AS size,
+                price,
+                iv,
+                TO_DATE(SUBSTRING(instrument_name FROM '\\d+[A-Z]{3}\\d{2}'), 'DDMONYY') AS expiration_date,
+                'Deribit' AS exchange
+            FROM 
+                ${asset === 'ALL' ? '(SELECT * FROM eth_block_trades UNION SELECT * FROM btc_block_trades) AS combined_trades' : asset.toLowerCase() + '_block_trades'}
+            WHERE 1=1
+        `;
 
         if (optionType !== 'ALL') {
             query += ` AND RIGHT(instrument_name, 1) = '${optionType}'`;
@@ -95,16 +90,16 @@ router.get('/trades', async (req, res) => {
 
         const tradesResult = await pool.query(query);
 
-        let trades = tradesResult.rows.map((trade) => {
+        const groupedTrades = tradesResult.rows.reduce((acc, trade) => {
             const strike = trade.instrument_name.match(/\d+(?=-[CP]$)/);
             const dte = calculateDTE(trade.instrument_name);
 
-            const priceInUSD = (parseFloat(trade.price) * parseFloat(trade.spot)).toFixed(2); // price * index_price
-            const premiumInUSD = (parseFloat(trade.price) * parseFloat(trade.size) * parseFloat(trade.spot)).toFixed(2); // price * size * index_price
+            const priceInUSD = (parseFloat(trade.price) * parseFloat(trade.spot)).toFixed(2);
+            const premiumInUSD = (parseFloat(trade.price) * parseFloat(trade.size) * parseFloat(trade.spot)).toFixed(2);
 
             const makerCalculated = determineMaker(parseFloat(premiumInUSD));
 
-            return {
+            const enhancedTrade = {
                 ...trade,
                 strike: strike ? strike[0] : null,
                 dte,
@@ -112,19 +107,30 @@ router.get('/trades', async (req, res) => {
                 premium: premiumInUSD,
                 maker: makerCalculated,
             };
-        });
 
+            if (maker && maker !== 'ALL' && enhancedTrade.maker !== maker) {
+                return acc;
+            }
 
-        if (maker && maker !== 'ALL') {
-            trades = trades.filter((trade) => trade.maker === maker);
-        }
+            if (!acc[trade.block_trade_id]) {
+                acc[trade.block_trade_id] = [];
+            }
+            acc[trade.block_trade_id].push(enhancedTrade);
 
-        const totalRows = trades.length;
+            return acc;
+        }, {});
+
+        const groupedArray = Object.entries(groupedTrades).map(([blockTradeId, trades]) => ({
+            blockTradeId,
+            trades,
+        }));
+
+        const totalRows = groupedArray.length;
         const totalPages = Math.ceil(totalRows / parsedPageSize);
-        const paginatedTrades = trades.slice(offset, offset + parsedPageSize);
+        const paginatedGroups = groupedArray.slice(offset, offset + parsedPageSize);
 
         res.json({
-            trades: paginatedTrades,
+            groupedTrades: paginatedGroups,
             totalPages,
         });
     } catch (error) {

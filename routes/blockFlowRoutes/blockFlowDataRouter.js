@@ -54,6 +54,7 @@ router.get('/trades', async (req, res) => {
                 amount AS size,
                 price,
                 iv,
+                mark_price,  -- Добавлено поле для mark_price
                 TO_DATE(SUBSTRING(instrument_name FROM '\\d+[A-Z]{3}\\d{2}'), 'DDMONYY') AS expiration_date,
                 'Deribit' AS exchange
             FROM 
@@ -61,6 +62,7 @@ router.get('/trades', async (req, res) => {
             WHERE 1=1
         `;
 
+        // Добавление фильтров в запрос (аналогично оригиналу)
         if (optionType !== 'ALL') {
             query += ` AND RIGHT(instrument_name, 1) = '${optionType}'`;
         }
@@ -97,6 +99,9 @@ router.get('/trades', async (req, res) => {
             const priceInUSD = (parseFloat(trade.price) * parseFloat(trade.spot)).toFixed(2);
             const premiumInUSD = (parseFloat(trade.price) * parseFloat(trade.size) * parseFloat(trade.spot)).toFixed(2);
 
+            const premiumInBaseAsset = (trade.price && trade.spot) ? (parseFloat(trade.price) / trade.spot).toFixed(4) : 'N/A';  // Премиум в базовом активе
+            const markPrice = trade.mark_price || 'N/A';  // Используем mark_price или 'N/A'
+
             const makerCalculated = determineMaker(parseFloat(premiumInUSD));
 
             const enhancedTrade = {
@@ -105,6 +110,8 @@ router.get('/trades', async (req, res) => {
                 dte,
                 price: priceInUSD,
                 premium: premiumInUSD,
+                premiumInBaseAsset,  // Добавляем премиум в базовом активе
+                markPrice,  // Добавляем mark_price
                 maker: makerCalculated,
             };
 
