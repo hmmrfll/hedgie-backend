@@ -4,7 +4,7 @@ const router = express.Router();
 const OpenAI = require('openai');
 
 const openai = new OpenAI({
-    apiKey: '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'
+    apiKey: process.env.OPENAI_API_KEY
 });
 
 router.post('/analyze', async (req, res) => {
