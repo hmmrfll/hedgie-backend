@@ -6,35 +6,91 @@ const openai = new OpenAI({
     apiKey: process.env.OPENAI_API_KEY
 });
 
+// Функция валидации данных
+function validateTrades(trades) {
+    if (!trades || !Array.isArray(trades) || trades.length === 0) {
+        throw new Error('Invalid trades data');
+    }
+
+    // Проверяем наличие необходимых полей в каждой сделке
+    trades.forEach((trade, index) => {
+        const requiredFields = [
+            'expiration_date', 'strike', 'side', 'k', 'size',
+            'iv', 'premium', 'spot', 'instrument_name', 'price'
+        ];
+
+        requiredFields.forEach(field => {
+            if (!(field in trade)) {
+                throw new Error(`Missing ${field} in trade ${index + 1}`);
+            }
+        });
+    });
+
+    return true;
+}
 // Функция определения типа стратегии
 function detectStrategy(trades) {
-    if (trades.length !== 2) return 'Complex Strategy';
+    if (!trades || trades.length !== 2) return 'Complex Strategy';
 
     const [trade1, trade2] = trades;
 
-    // Проверяем основные параметры
-    const sameStrike = trade1.strike === trade2.strike;
-    const sameExpiry = trade1.expiration_date === trade2.expiration_date;
-    const oppositeDirections = (trade1.side === 'buy' && trade2.side === 'sell') ||
-        (trade1.side === 'sell' && trade2.side === 'buy');
-    const samePutCall = trade1.k === trade2.k;
-    const sameSize = trade1.size === trade2.size;
+    try {
+        const sameStrike = trade1.strike === trade2.strike;
+        const sameExpiry = trade1.expiration_date === trade2.expiration_date;
+        const oppositeDirections = (trade1.side === 'buy' && trade2.side === 'sell') ||
+            (trade1.side === 'sell' && trade2.side === 'buy');
+        const samePutCall = trade1.k === trade2.k;
+        const sameSize = trade1.size === trade2.size;
 
-    // Определяем тип стратегии
-    if (oppositeDirections && sameSize) {
-        if (sameStrike && !sameExpiry && samePutCall) {
-            return 'Calendar Spread';
+        if (oppositeDirections && sameSize) {
+            if (sameStrike && !sameExpiry && samePutCall) {
+                return 'Calendar Spread';
+            }
+            if (!sameStrike && sameExpiry && samePutCall) {
+                return 'Vertical Spread';
+            }
+            if (sameExpiry && !samePutCall) {
+                if (sameStrike) return 'Conversion/Reversal';
+                return 'Diagonal Spread';
+            }
         }
-        if (!sameStrike && sameExpiry && samePutCall) {
-            return 'Vertical Spread';
-        }
-        if (sameExpiry && !samePutCall) {
-            if (sameStrike) return 'Conversion/Reversal';
-            return 'Diagonal Spread';
-        }
+
+        return 'Custom Strategy';
+    } catch (error) {
+        console.error('Error in detectStrategy:', error);
+        return 'Unknown Strategy';
     }
+}
+// Безопасное вычисление метрик
+function calculateMetrics(trades) {
+    try {
+        const expiryDiff = Math.round(
+            (new Date(trades[0].expiration_date) - new Date(trades[1].expiration_date)) /
+            (1000 * 60 * 60 * 24)
+        );
 
-    return 'Custom Strategy';
+        const netPremium = trades.reduce((sum, trade) =>
+            sum + (trade.side === 'sell' ? trade.premium : -trade.premium), 0
+        );
+
+        const strikeVsSpot = ((trades[0].strike - trades[0].spot) / trades[0].spot * 100).toFixed(2);
+        const volDiff = Math.abs(trades[0].iv - trades[1].iv).toFixed(2);
+
+        return {
+            expiryDiff,
+            netPremium,
+            strikeVsSpot,
+            volDiff
+        };
+    } catch (error) {
+        console.error('Error calculating metrics:', error);
+        return {
+            expiryDiff: 'N/A',
+            netPremium: 'N/A',
+            strikeVsSpot: 'N/A',
+            volDiff: 'N/A'
+        };
+    }
 }
 
 router.post('/analyze', async (req, res) => {
@@ -42,26 +98,24 @@ router.post('/analyze', async (req, res) => {
         const { trades } = req.body;
         console.log('Received trades:', trades);
 
-        if (!trades || !Array.isArray(trades)) {
-            return res.status(400).json({ error: 'Invalid trades data' });
-        }
+        // Валидация входных данных
+        validateTrades(trades);
 
         // Определяем тип стратегии
         const strategyType = detectStrategy(trades);
+        console.log('Strategy Type:', strategyType);
 
         // Рассчитываем метрики
-        const expiryDiff = Math.round((new Date(trades[0].expiration_date) - new Date(trades[1].expiration_date)) / (1000 * 60 * 60 * 24));
-        const netPremium = trades.reduce((sum, trade) =>
-            sum + (trade.side === 'sell' ? trade.premium : -trade.premium), 0
-        );
+        const metrics = calculateMetrics(trades);
+        console.log('Calculated Metrics:', metrics);
 
-        const prompt = `You are analyzing a BTC options block trade (${trades[0].block_trade_id}):
+        const prompt = `You are analyzing a BTC options block trade (${trades[0].block_trade_id || 'Unknown ID'}):
 
 Market Context:
 • BTC Current Price: $${trades[0].spot}
-• Trade Time: ${trades[0].timeutc} UTC
-• Exchange: ${trades[0].exchange}
-• Type: Block Trade by ${trades[0].maker}
+• Trade Time: ${trades[0].timeutc || 'Unknown'}
+• Exchange: ${trades[0].exchange || 'Unknown'}
+• Type: Block Trade by ${trades[0].maker || 'Unknown'}
 
 Strategy Type: ${strategyType}
 
@@ -69,49 +123,49 @@ Trade Details:
 ${trades.map(trade => `
 ${trade.side.toUpperCase()} ${trade.size} contracts of ${trade.instrument_name}
 • Option Type: ${trade.k === 'P' ? 'Put' : 'Call'}
-• Expires: ${new Date(trade.expiration_date).toLocaleDateString()} (${trade.dte})
+• Expires: ${new Date(trade.expiration_date).toLocaleDateString()} (${trade.dte || 'Unknown'})
 • Strike: $${trade.strike}
 • IV: ${trade.iv}%
 • Premium: $${trade.premium}
 • Price per contract: $${trade.price}`).join('\n')}
 
 Position Metrics:
-• Net Premium: ${netPremium > 0 ? '+$' : '-$'}${Math.abs(netPremium).toFixed(2)}
-• Strike vs Spot: ${((trades[0].strike - trades[0].spot) / trades[0].spot * 100).toFixed(2)}%
-${strategyType === 'Calendar Spread' ? `• Expiry Difference: ${expiryDiff} days` : ''}
-• Volatility Differential: ${Math.abs(trades[0].iv - trades[1].iv).toFixed(2)}%
+• Net Premium: ${metrics.netPremium !== 'N/A' ?
+            (metrics.netPremium > 0 ? '+$' : '-$') + Math.abs(metrics.netPremium).toFixed(2) : 'N/A'}
+• Strike vs Spot: ${metrics.strikeVsSpot}%
+${strategyType === 'Calendar Spread' ? `• Expiry Difference: ${metrics.expiryDiff} days` : ''}
+• Volatility Differential: ${metrics.volDiff}%
 
 Please analyze this ${strategyType} from an institutional perspective:
 
 1. Strategy Analysis
-   - Strategic rationale behind this ${strategyType.toLowerCase()}
-   - Why these specific parameters were chosen
+   - Strategic rationale and objectives
+   - Parameter selection logic
    - Expected market behavior thesis
 
 2. Volatility Analysis
-   - Analysis of the ${Math.abs(trades[0].iv - trades[1].iv).toFixed(2)}% IV differential
-   ${strategyType === 'Calendar Spread' ? '- Term structure implications' : '- Skew implications'}
-   - Impact on position profitability
+   - IV differential analysis
+   - Term structure/skew implications
+   - Volatility exposure
 
 3. Risk Profile
-   - Detailed P&L scenarios
-   - Key price levels and breakeven analysis
-   - Primary risk factors and hedging considerations
+   - P&L scenarios
+   - Key levels and breakevens
+   - Risk factors and hedging
 
 4. Market Context
-   - What this institutional positioning suggests
-   - Relevant market catalysts or events
-   - Related market dynamics to monitor
+   - Institutional positioning implications
+   - Relevant catalysts and events
+   - Market dynamics to monitor
 
 5. Trade Management
-   - Position management considerations
-   - Adjustment triggers and scenarios
-   - Exit strategies based on market movement
+   - Position management guidelines
+   - Adjustment scenarios
+   - Exit strategies
 
 Provide sophisticated analysis focusing on institutional perspective and practical trading implications.`;
 
         console.log('=== Sending prompt to OpenAI (GPT-4) ===');
-        console.log('Strategy Type Detected:', strategyType);
         console.log(prompt);
         console.log('======================================');
 
@@ -136,16 +190,18 @@ Provide sophisticated analysis focusing on institutional perspective and practic
         res.json({
             analysis: response.choices[0].message.content,
             strategyType,
+            metrics,
             model: "gpt-4"
         });
     } catch (error) {
-        console.error('Server error:', error);
+        console.error('Server error details:', error);
         res.status(500).json({
             error: error.message,
             model: "gpt-4"
         });
     }
 });
+
 router.post('/analyze-metrics', async (req, res) => {
     try {
         const { metrics } = req.body;
