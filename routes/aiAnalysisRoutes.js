@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const OpenAI = require('openai');
+const pool = require('../config/database');
 
 const openai = new OpenAI({
     apiKey: process.env.OPENAI_API_KEY
@@ -96,18 +97,15 @@ function calculateMetrics(trades) {
 router.post('/analyze', async (req, res) => {
     try {
         const { trades } = req.body;
-        console.log('Received trades:', trades);
 
         // Валидация входных данных
         validateTrades(trades);
 
         // Определяем тип стратегии
         const strategyType = detectStrategy(trades);
-        console.log('Strategy Type:', strategyType);
 
         // Рассчитываем метрики
         const metrics = calculateMetrics(trades);
-        console.log('Calculated Metrics:', metrics);
 
         const prompt = `You are analyzing a BTC options block trade (${trades[0].block_trade_id || 'Unknown ID'}):
 
@@ -165,9 +163,6 @@ Please analyze this ${strategyType} from an institutional perspective:
 
 Provide sophisticated analysis focusing on institutional perspective and practical trading implications.`;
 
-        console.log('=== Sending prompt to OpenAI (GPT-4) ===');
-        console.log(prompt);
-        console.log('======================================');
 
         const response = await openai.chat.completions.create({
             model: "gpt-4",
@@ -182,10 +177,6 @@ Provide sophisticated analysis focusing on institutional perspective and practic
             temperature: 0.7
         });
 
-        console.log('=== GPT-4 Response ===');
-        console.log('Response content:', response.choices[0].message.content);
-        console.log('Usage:', response.usage);
-        console.log('====================');
 
         res.json({
             analysis: response.choices[0].message.content,
@@ -202,47 +193,233 @@ Provide sophisticated analysis focusing on institutional perspective and practic
     }
 });
 
+// Маппинг сокращений бирж
+const EXCHANGE_MAPPING = {
+    'DER': 'Deribit',
+    'DERIBIT': 'Deribit',
+    'BIT': 'Bybit',
+    'BYBIT': 'Bybit',
+    'BNB': 'Binance',
+    'BINANCE': 'Binance',
+    'OKX': 'OKX'
+};
+
+function getExchangeName(code) {
+    return EXCHANGE_MAPPING[code.toUpperCase()] || code;
+}
+function formatLargeNumber(number) {
+    if (typeof number !== 'number') {
+        number = parseFloat(number.replace(/[^\d.-]/g, ''));
+    }
+    if (number >= 1e9) {
+        return (number / 1e9).toFixed(2) + 'B';
+    }
+    if (number >= 1e6) {
+        return (number / 1e6).toFixed(2) + 'M';
+    }
+    if (number >= 1e3) {
+        return (number / 1e3).toFixed(2) + 'K';
+    }
+    return number.toFixed(2);
+}
+
+// Exchange tables configuration
+const exchangeTables = {
+    OKX: {
+        btc: 'okx_btc_trades',
+        eth: 'okx_eth_trades',
+    },
+    DER: {
+        btc: 'all_btc_trades',
+        eth: 'all_eth_trades',
+    },
+};
+
 router.post('/analyze-metrics', async (req, res) => {
     try {
-        const { metrics } = req.body;
-        console.log('Received metrics:', metrics);
+        const { metrics, timeRange = '24h', exchange } = req.body;
+        const tableName = exchangeTables[exchange?.toUpperCase()]?.btc || 'all_btc_trades';
+        let interval = '24 hours';
 
-        if (!metrics) {
-            return res.status(400).json({ error: 'Missing metrics data' });
-        }
+        if (timeRange === '7d') interval = '7 days';
+        else if (timeRange === '30d') interval = '30 days';
 
-        const prompt = `Analysis for: ${metrics.asset} on ${metrics.exchange}
-                    Period: ${metrics.timeRange}
-                    Price: $${metrics.avgPrice}
-                    Volume: $${metrics.totalVolume}
-                    Premium: $${metrics.totalPremium}`;
+        // Fetch all required metrics from database
+        const directionMetrics = await pool.query(`
+            SELECT 
+                SUM(CASE WHEN instrument_name LIKE '%-C' AND direction = 'buy' THEN amount ELSE 0 END) AS "Call_Buys",
+                SUM(CASE WHEN instrument_name LIKE '%-C' AND direction = 'sell' THEN amount ELSE 0 END) AS "Call_Sells",
+                SUM(CASE WHEN instrument_name LIKE '%-P' AND direction = 'buy' THEN amount ELSE 0 END) AS "Put_Buys",
+                SUM(CASE WHEN instrument_name LIKE '%-P' AND direction = 'sell' THEN amount ELSE 0 END) AS "Put_Sells"
+            FROM ${tableName}
+            WHERE timestamp >= NOW() - INTERVAL '${interval}';
+        `);
 
-        console.log('=== Sending metrics prompt to OpenAI ===');
-        console.log(prompt);
-        console.log('=======================================');
+        const popularOptions = await pool.query(`
+            SELECT instrument_name, COUNT(*) AS trade_count
+            FROM ${tableName}
+            WHERE timestamp >= NOW() - INTERVAL '${interval}'
+            GROUP BY instrument_name
+            ORDER BY trade_count DESC
+            LIMIT 10;
+        `);
+
+        const strikeActivity = await pool.query(`
+            SELECT instrument_name, COUNT(*) AS trade_count
+            FROM ${tableName}
+            WHERE timestamp >= NOW() - INTERVAL '${interval}'
+            GROUP BY instrument_name
+            ORDER BY trade_count DESC;
+        `);
+
+        const timeDistribution = await pool.query(`
+            SELECT
+                DATE_TRUNC('hour', timestamp) as hour,
+                CASE WHEN instrument_name LIKE '%-C' THEN 'call' ELSE 'put' END AS option_type,
+                COUNT(*) as trade_count
+            FROM ${tableName}
+            WHERE timestamp >= NOW() - INTERVAL '${interval}'
+            GROUP BY hour, option_type
+            ORDER BY hour DESC;
+        `);
+
+        // Format the data for the prompt
+        const dm = directionMetrics.rows[0];
+        const total = parseFloat(dm.Call_Buys) + parseFloat(dm.Call_Sells) +
+            parseFloat(dm.Put_Buys) + parseFloat(dm.Put_Sells);
+
+        console.log('=== Starting Prompt Generation ===');
+        console.log('Base parameters:', {
+            asset: metrics.asset,
+            exchange: getExchangeName(exchange),
+            interval,
+            tableName
+        });
+
+        console.log('Direction Metrics:', directionMetrics.rows[0]);
+        console.log('Popular Options:', popularOptions.rows.slice(0, 5));
+        console.log('Time Distribution Summary:', timeDistribution.rows.length + ' entries');
+
+        const prompt = `Analyze the following ${metrics.asset} options market activity on ${getExchangeName(exchange)} over the last ${interval}:
+
+1. Direction Analysis:
+   • Call Buys: ${((parseFloat(dm.Call_Buys) / total) * 100).toFixed(2)}%
+   • Call Sells: ${((parseFloat(dm.Call_Sells) / total) * 100).toFixed(2)}%
+   • Put Buys: ${((parseFloat(dm.Put_Buys) / total) * 100).toFixed(2)}%
+   • Put Sells: ${((parseFloat(dm.Put_Sells) / total) * 100).toFixed(2)}%
+
+2. Top Traded Options Analysis:
+   ${popularOptions.rows.slice(0, 5).map(row =>
+            `• ${row.instrument_name}: ${row.trade_count} trades`).join('\n   ')}
+
+3. Strike Price Activity:
+   ${formatStrikeActivityForPrompt(strikeActivity.rows)}
+
+4. Trading Pattern Analysis:
+   • Most active trading hours (UTC)
+   • Call vs Put distribution throughout the day
+   • Notable volume spikes or unusual patterns
+
+Key Market Metrics:
+• Average Option Price: $${metrics.avgPrice}
+• Total Trading Volume: $${formatLargeNumber(metrics.totalVolume)}
+• Total Premium Traded: $${formatLargeNumber(metrics.totalPremium)}
+• Premium/Volume Ratio: ${(metrics.totalPremium / metrics.totalVolume * 100).toFixed(2)}%
+
+Please provide a comprehensive market analysis covering:
+
+1. Market Sentiment Assessment
+   - What is the dominant trading direction (calls vs puts)?
+   - Are traders positioning more defensively or aggressively?
+   - How does the put/call ratio compare to recent trends?
+
+2. Top Traded Options Analysis
+   - What patterns emerge from the most actively traded options?
+   - What do the expiration dates of top traded options suggest about market expectations?
+   - Is there a notable bias in strike prices selection (OTM/ITM/ATM)?
+   - Are there any significant imbalances between calls and puts in top trades?
+   - What might the concentration of trades in specific strikes/dates indicate?
+
+3. Strike Price Analysis
+   - Which strike prices are seeing the most activity?
+   - What does the distribution of strikes suggest about price expectations?
+   - Are there any notable concentrations of activity at specific levels?
+
+4. Trading Patterns and Timing
+   - What are the peak trading hours and their significance?
+   - Are there any correlations between time periods and option types?
+   - How might these patterns inform trading strategies?
+
+5. Market Implications
+   - What potential market moves might this activity be anticipating?
+   - Are there any significant risk factors indicated by these metrics?
+   - How might this affect near-term market dynamics?
+
+Focus on practical insights and actionable information for traders. Keep the analysis clear and data-driven.`;
 
         const response = await openai.chat.completions.create({
-            model: "gpt-3.5-turbo",
+            model: "gpt-4",
             messages: [{
+                role: "system",
+                content: "You are a crypto options market analyst specializing in derivatives exchanges. Provide clear, actionable insights about market activity and potential implications. Use data-driven analysis to support your conclusions."
+            }, {
                 role: "user",
                 content: prompt
             }],
-            max_tokens: 500
+            max_tokens: 1500,
+            temperature: 0.7
         });
 
-        console.log('=== OpenAI Metrics Response ===');
-        console.log('Response content:', response.choices[0].message.content);
-        console.log('Usage:', response.usage);
-        console.log('============================');
+        res.json({
+            analysis: response.choices[0].message.content,
+            metrics: {
+                direction: directionMetrics.rows[0],
+                popularOptions: popularOptions.rows.slice(0, 5),
+                timeDistribution: timeDistribution.rows
+            }
+        });
 
-        res.json({ analysis: response.choices[0].message.content });
     } catch (error) {
-        console.error('Server error details:', error);
-        res.status(500).json({
-            error: error.message,
-            details: error.response?.data
-        });
+        console.error('Analysis error:', error);
+        res.status(500).json({ error: error.message });
     }
 });
+
+// Helper function to format strike activity data
+function formatStrikeActivityForPrompt(strikeData) {
+    const aggregated = strikeData.reduce((acc, row) => {
+        const match = row.instrument_name.match(/(\d+)-([CP])$/);
+        if (!match) return acc;
+
+        const [_, strike, type] = match;
+        const key = `${strike}-${type}`;
+        acc[key] = (acc[key] || 0) + parseInt(row.trade_count);
+        return acc;
+    }, {});
+
+    return Object.entries(aggregated)
+        .sort(([, a], [, b]) => b - a)
+        .slice(0, 5)
+        .map(([strike, count]) =>
+            `• Strike ${strike}: ${count} trades`)
+        .join('\n   ');
+}
+
+// Helper function to get exchange name
+function getExchangeName(exchange) {
+    const exchangeMap = {
+        'OKX': 'OKX',
+        'DER': 'Deribit'
+    };
+    return exchangeMap[exchange?.toUpperCase()] || 'Unknown Exchange';
+}
+
+// Helper function to format large numbers
+function formatLargeNumber(num) {
+    return new Intl.NumberFormat('en-US', {
+        minimumFractionDigits: 0,
+        maximumFractionDigits: 0
+    }).format(num);
+}
 
 module.exports = router;
