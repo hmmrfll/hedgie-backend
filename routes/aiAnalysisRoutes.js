@@ -283,22 +283,26 @@ router.post('/analyze-metrics', async (req, res) => {
             ORDER BY hour DESC;
         `);
 
+        const expirationActivity = await pool.query(`
+            SELECT 
+                SUBSTRING(instrument_name FROM '([0-9]{1,2}[A-Z]{3}[0-9]{2})') AS expiration_date,
+                CASE WHEN instrument_name LIKE '%-C' THEN 'call' ELSE 'put' END AS option_type,
+                COUNT(*) AS trade_count
+            FROM 
+                ${tableName}
+            WHERE 
+                timestamp >= NOW() - INTERVAL '${interval}'
+            GROUP BY 
+                expiration_date, option_type
+            ORDER BY 
+                expiration_date;
+        `);
+
+
         // Format the data for the prompt
         const dm = directionMetrics.rows[0];
         const total = parseFloat(dm.Call_Buys) + parseFloat(dm.Call_Sells) +
             parseFloat(dm.Put_Buys) + parseFloat(dm.Put_Sells);
-
-        console.log('=== Starting Prompt Generation ===');
-        console.log('Base parameters:', {
-            asset: metrics.asset,
-            exchange: getExchangeName(exchange),
-            interval,
-            tableName
-        });
-
-        console.log('Direction Metrics:', directionMetrics.rows[0]);
-        console.log('Popular Options:', popularOptions.rows.slice(0, 5));
-        console.log('Time Distribution Summary:', timeDistribution.rows.length + ' entries');
 
         const prompt = `Analyze the following ${metrics.asset} options market activity on ${getExchangeName(exchange)} over the last ${interval}:
 
@@ -319,6 +323,13 @@ router.post('/analyze-metrics', async (req, res) => {
    • Most active trading hours (UTC)
    • Call vs Put distribution throughout the day
    • Notable volume spikes or unusual patterns
+   
+5. Expiration Analysis:
+   ${formatExpirationActivityForPrompt(expirationActivity.rows)}
+   
+6. Hourly Trading Distribution:
+   ${formatHourlyDistribution(timeDistribution)}
+
 
 Key Market Metrics:
 • Average Option Price: $${metrics.avgPrice}
@@ -349,13 +360,28 @@ Please provide a comprehensive market analysis covering:
    - What are the peak trading hours and their significance?
    - Are there any correlations between time periods and option types?
    - How might these patterns inform trading strategies?
+   
+5. Expiration Date Analysis
+   - What is the most active expiration date overall?
+   - How is activity distributed between near-term and longer-dated options?
+   - Is there a preference for specific expiration dates in calls vs puts?
+   - What do the expiration preferences suggest about market outlook?
+   - Are there any notable imbalances in call/put ratio for specific dates?
 
-5. Market Implications
+6. Market Implications
    - What potential market moves might this activity be anticipating?
    - Are there any significant risk factors indicated by these metrics?
    - How might this affect near-term market dynamics?
 
 Focus on practical insights and actionable information for traders. Keep the analysis clear and data-driven.`;
+
+        console.log('=== Final Prompt ===');
+        console.log(prompt);
+        console.log('=== Prompt Metrics ===');
+        console.log('Prompt length:', prompt.length);
+        console.log('Number of sections:', prompt.split('\n\n').length);
+        console.log('================================');
+
 
         const response = await openai.chat.completions.create({
             model: "gpt-4",
@@ -384,6 +410,75 @@ Focus on practical insights and actionable information for traders. Keep the ana
         res.status(500).json({ error: error.message });
     }
 });
+
+function formatHourlyDistribution(timeDistribution) {
+    const hourlyData = timeDistribution.rows.reduce((acc, row) => {
+        const hour = new Date(row.hour).getUTCHours();
+        if (!acc[hour]) {
+            acc[hour] = { calls: 0, puts: 0 };
+        }
+        if (row.option_type === 'call') {
+            acc[hour].calls += parseInt(row.trade_count);
+        } else {
+            acc[hour].puts += parseInt(row.trade_count);
+        }
+        return acc;
+    }, {});
+
+    return Object.entries(hourlyData)
+        .sort(([a], [b]) => parseInt(a) - parseInt(b))
+        .map(([hour, data]) =>
+            `• ${String(hour).padStart(2, '0')}:00 UTC: ${data.calls} calls, ${data.puts} puts`)
+        .join('\n   ');
+}
+function formatExpirationActivityForPrompt(expirationData) {
+    // Group by expiration date
+    const grouped = expirationData.reduce((acc, row) => {
+        if (!acc[row.expiration_date]) {
+            acc[row.expiration_date] = {
+                calls: 0,
+                puts: 0
+            };
+        }
+        if (row.option_type === 'call') {
+            acc[row.expiration_date].calls += parseInt(row.trade_count);
+        } else {
+            acc[row.expiration_date].puts += parseInt(row.trade_count);
+        }
+        return acc;
+    }, {});
+
+    // Convert to array and sort by date
+    const sortedDates = Object.entries(grouped)
+        .map(([date, counts]) => ({
+            date,
+            total: counts.calls + counts.puts,
+            ratio: counts.calls / (counts.puts || 1)
+        }))
+        .sort((a, b) => new Date(convertToISODate(a.date)) - new Date(convertToISODate(b.date)));
+
+    // Format the output
+    return sortedDates
+        .slice(0, 5)
+        .map(({ date, total, ratio }) =>
+            `• ${date}: ${total} trades (C/P ratio: ${ratio.toFixed(2)})`
+        )
+        .join('\n   ');
+}
+
+// Helper function to convert date format
+function convertToISODate(dateStr) {
+    const months = {
+        JAN: '01', FEB: '02', MAR: '03', APR: '04', MAY: '05', JUN: '06',
+        JUL: '07', AUG: '08', SEP: '09', OCT: '10', NOV: '11', DEC: '12'
+    };
+
+    const day = dateStr.substring(0, 2);
+    const month = months[dateStr.substring(2, 5)];
+    const year = '20' + dateStr.substring(5, 7);
+
+    return `${year}-${month}-${day}`;
+}
 
 // Helper function to format strike activity data
 function formatStrikeActivityForPrompt(strikeData) {
