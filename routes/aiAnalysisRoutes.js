@@ -238,7 +238,7 @@ const exchangeTables = {
 router.post('/analyze-metrics', async (req, res) => {
     try {
         const { metrics, timeRange = '24h', exchange } = req.body;
-        const tableName = exchangeTables[exchange?.toUpperCase()]?.btc || 'all_btc_trades';
+        const tableName = metrics.asset === 'ETH' ? 'all_eth_trades' : 'all_btc_trades';
         let interval = '24 hours';
 
         if (timeRange === '7d') interval = '7 days';
