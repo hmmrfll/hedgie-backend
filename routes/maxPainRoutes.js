@@ -26,10 +26,9 @@ const isDataStale = () => {
 };
 
 router.get('/max-pain-data', async (req, res) => {
-    const { currency } = req.query;
+    const { currency, forceUpdate } = req.query;
 
     try {
-
         let tableName;
         if (currency.toLowerCase() === 'btc') {
             tableName = 'max_pain_data_btc';
@@ -39,10 +38,14 @@ router.get('/max-pain-data', async (req, res) => {
             return res.status(400).json({ success: false, message: 'Неверная валюта' });
         }
 
-        if (!isDataStale()) {
+
+        // Проверяем существующие данные, если нет необходимости в обновлении
+        if (!isDataStale() && forceUpdate !== 'true') {
             const existingDataQuery = `SELECT expiration_date, max_pain, intrinsic_values FROM ${tableName}`;
             const result = await pool.query(existingDataQuery);
+
             const maxPainByExpiration = {};
+
             result.rows.forEach(row => {
                 maxPainByExpiration[row.expiration_date] = {
                     maxPain: row.max_pain,
@@ -59,35 +62,51 @@ router.get('/max-pain-data', async (req, res) => {
             `https://deribit.com/api/v2/public/get_book_summary_by_currency?currency=${currency}&kind=option`
         );
 
+        // Группировка данных по срокам экспирации
         const optionsDataByExpiration = {};
         response.data.result.forEach(option => {
-            const expiration = extractExpiration(option.instrument_name);
-            const strikePrice = parseFloat(option.instrument_name.split('-')[2]);
-            const openInterest = parseFloat(option.open_interest);
-            const optionType = option.instrument_name.split('-')[3];
+            try {
+                const expiration = extractExpiration(option.instrument_name);
+                const strikePrice = parseFloat(option.instrument_name.split('-')[2]);
+                const openInterest = parseFloat(option.open_interest);
+                const optionType = option.instrument_name.split('-')[3];
 
-            if (!optionsDataByExpiration[expiration]) {
-                optionsDataByExpiration[expiration] = [];
+                if (!optionsDataByExpiration[expiration]) {
+                    optionsDataByExpiration[expiration] = [];
+                }
+                optionsDataByExpiration[expiration].push({
+                    strike_price: strikePrice,
+                    open_interest: openInterest,
+                    option_type: optionType
+                });
+            } catch (error) {
             }
-            optionsDataByExpiration[expiration].push({
-                strike_price: strikePrice,
-                open_interest: openInterest,
-                option_type: optionType
-            });
         });
 
-        const maxPainByExpiration = {};
+
+        if (Object.keys(optionsDataByExpiration).length === 0) {
+            return res.status(500).json({
+                success: false,
+                message: 'Не удалось обработать данные опционов'
+            });
+        }
+
+        // Удаление старых данных
         await pool.query(`DELETE FROM ${tableName}`);
+
+        // Расчет Max Pain для каждого срока экспирации и сохранение в БД
+        const maxPainByExpiration = {};
         for (const expiration in optionsDataByExpiration) {
             const { maxPain, intrinsicValues } = calculateMaxPain(optionsDataByExpiration[expiration]);
             maxPainByExpiration[expiration] = { maxPain, intrinsicValues };
+
             const insertQuery = `
                 INSERT INTO ${tableName} (expiration_date, max_pain, intrinsic_values)
                 VALUES ($1, $2, $3)
             `;
             await pool.query(insertQuery, [
                 expiration,
-                maxPain,
+                maxPain.toString(), // Преобразуем в строку для сохранения
                 JSON.stringify(intrinsicValues)
             ]);
         }
@@ -95,8 +114,11 @@ router.get('/max-pain-data', async (req, res) => {
         lastUpdateTime = new Date();
         res.json({ maxPainByExpiration });
     } catch (error) {
-        console.error('Ошибка при расчете Max Pain:', error);
-        res.status(500).json({ success: false, message: 'Не удалось рассчитать Max Pain', error: error.message });
+        res.status(500).json({
+            success: false,
+            message: 'Не удалось рассчитать Max Pain',
+            error: error.message
+        });
     }
 });
 
