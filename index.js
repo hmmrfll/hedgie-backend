@@ -2,8 +2,8 @@ const express = require('express');
 const cors = require('cors');
 const pool = require('./config/database');
 const initializeDatabase = require('./scripts/initDb');
+const deribit_collector = require('./internal/gateways/deribit/deribit_collector');
 
-// Импортируем все маршруты
 const authRoutes = require('./routes/authRoutes');
 const metricsRoutes = require('./routes/overviewRoutes/metricsRoutes');
 const popularOptionsRouter = require('./routes/overviewRoutes/popularOptionsRouter');
@@ -39,38 +39,65 @@ const popularOptionByVolumeBlockTradesRouter = require('./routes/blockTradesRout
 const aiAnalysisRoutes = require('./routes/aiAnalysisRoutes');
 
 async function startServer() {
-    try {
-        await initializeDatabase();
+	try {
+		await initializeDatabase();
+		deribit_collector.start();
 
-        const app = express();
+		const app = express();
 
-        app.use(cors({
-            origin: process.env.FRONTEND_URL || 'http://localhost:5173',
-            methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-            allowedHeaders: ['Content-Type', 'Authorization']
-        }));
+		app.use(
+			cors({
+				origin: process.env.FRONTEND_URL || 'http://localhost:5173',
+				methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+				allowedHeaders: ['Content-Type', 'Authorization'],
+			}),
+		);
 
-        app.use(express.json());
+		app.use(express.json());
 
-        app.use('/api/metrics', metricsRoutes, popularOptionsRouter, strikeActivityRouter, expirationActivityRouter, timeDistributionRouter, keyMetricsRouter, popularOptionByVolumeRouter);
-        app.use('/api/block-trades', blockTradesRouter, popularOptionsBlockTradesRouter, strikeActivityBlockTradesRouter, expirationActivityBlockTradesRouter, timeDistributionBlockTradesRouter, keyMetricsBlockTradesRouter, popularOptionByVolumeBlockTradesRouter);
-        app.use('/api', authRoutes, maxPainRoutes, expirationRouter, strikeRouter, flowDataRouter);
-        app.use('/api/open-interest', openInterest, openInterestByExpirationRouter, openInterestByStrikeRouter);
-        app.use('/api', openInterestDeltaAdjusted, openInterestHistorical);
-        app.use('/api/volume', volumeInterestRouter, volumeByExpirationRouter, volumeByStrikeRouter, volumePopularOptionsRouter);
-        app.use('/api/datalab', dataDownload);
-        app.use('/api/flow', flowMetricsRouter, lastDataRouter);
-        app.use('/api/block/flow', blockFlowDataRouter);
-        app.use('/api/ai', aiAnalysisRoutes);
+		app.use(
+			'/api/metrics',
+			metricsRoutes,
+			popularOptionsRouter,
+			strikeActivityRouter,
+			expirationActivityRouter,
+			timeDistributionRouter,
+			keyMetricsRouter,
+			popularOptionByVolumeRouter,
+		);
+		app.use(
+			'/api/block-trades',
+			blockTradesRouter,
+			popularOptionsBlockTradesRouter,
+			strikeActivityBlockTradesRouter,
+			expirationActivityBlockTradesRouter,
+			timeDistributionBlockTradesRouter,
+			keyMetricsBlockTradesRouter,
+			popularOptionByVolumeBlockTradesRouter,
+		);
+		app.use('/api', authRoutes, maxPainRoutes, expirationRouter, strikeRouter, flowDataRouter);
+		app.use('/api/open-interest', openInterest, openInterestByExpirationRouter, openInterestByStrikeRouter);
+		app.use('/api', openInterestDeltaAdjusted, openInterestHistorical);
+		app.use(
+			'/api/volume',
+			volumeInterestRouter,
+			volumeByExpirationRouter,
+			volumeByStrikeRouter,
+			volumePopularOptionsRouter,
+		);
+		app.use('/api/datalab', dataDownload);
+		app.use('/api/flow', flowMetricsRouter, lastDataRouter);
+		app.use('/api/block/flow', blockFlowDataRouter);
+		app.use('/api/ai', aiAnalysisRoutes);
 
-        const PORT = process.env.PORT || 5003;
-        app.listen(PORT, () => {
-            console.log(`Server is running on port ${PORT}`);
-        });
-    } catch (error) {
-        console.error('Failed to start server:', error);
-        process.exit(1);
-    }
+		const PORT = process.env.BACKEND_PORT || 5003;
+		app.listen(PORT, () => {
+			console.log(`Server is running on port ${PORT}`);
+		});
+	} catch (error) {
+		console.error('Failed to start server:', error);
+		process.exit(1);
+	}
 }
 
 startServer();
