@@ -23,7 +23,7 @@ services:
     build: .
     container_name: ${BACKEND_CONTAINER_NAME}
     ports:
-      - "${BACKEND_PORT}:3000"
+      - "${BACKEND_PORT}:${BACKEND_LOCAL_PORT}"
     depends_on:
       - db
     networks:
